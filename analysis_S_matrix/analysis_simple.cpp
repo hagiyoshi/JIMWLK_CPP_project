@@ -2251,7 +2251,7 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 
 
 		std::ostringstream ofilename_Wigner, ofilename_Wigner_all;
-		ofilename_Wigner << "DPE_WWEE_Wigner_diag_woaa_NX_" << NX << "_size_" << LATTICE_SIZE
+		ofilename_Wigner << "G:\\hagiyoshi\\Data\\JIMWLK\\output\\DPE_WWEE_Wigner_diag_woaa_NX_" << NX << "_size_" << LATTICE_SIZE
 			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
 		std::ofstream ofs_res_Wigner(ofilename_Wigner.str().c_str());
 
@@ -2525,7 +2525,7 @@ void Wigner_DP_WW_diagonal(std::complex<double>* V_matrix, int max_rap, int num_
 
 
 		std::ostringstream ofilename_Wigner, ofilename_Wigner_all;
-		ofilename_Wigner << "DP_WW_Wigner_diag_direct_NX_" << NX << "_size_" << LATTICE_SIZE
+		ofilename_Wigner << "G:\\hagiyoshi\\Data\\JIMWLK\\output\\DP_WW_Wigner_diag_direct_NX_" << NX << "_size_" << LATTICE_SIZE
 			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
 		std::ofstream ofs_res_Wigner(ofilename_Wigner.str().c_str());
 
@@ -2734,6 +2734,7 @@ void Load_trV(std::complex<double>* trace_V, const double number_rapidity, const
 
 void JIMWLK_test(int position) {
 	std::complex<double>* trace_V = new std::complex<double>[NX*NX];
+	double* trace_V_square = new double[NX*NX];
 	std::complex<double>* trace_V_temp = new std::complex<double>[NX*NX];
 	std::vector<std::complex<double>> D_matrix(NX / 2, 0);
 
@@ -2743,13 +2744,15 @@ void JIMWLK_test(int position) {
 		relative_distance[re] = re*h;
 	}
 
-	for (int i = 0; i < NX*NX; i++) { trace_V[i] = 0; }
+	for (int i = 0; i < NX*NX; i++) { trace_V[i] = 0; trace_V_square[i] = 0;}
 
 	double number_rapidity = 0.01 / 3.0;
 	for (int num = initial_number; num < number_of_comfig; num++) {
 		Load_trV(trace_V_temp,number_rapidity,num);
 
-		for (int i = 0; i < NX*NX; i++) { trace_V[i] += trace_V_temp[i]; }
+		for (int i = 0; i < NX*NX; i++) { trace_V[i] += trace_V_temp[i];  
+		trace_V_square[i] += trace_V_temp[i].real() * trace_V_temp[i].real();
+		}
 	}
 
 
@@ -2760,7 +2763,7 @@ void JIMWLK_test(int position) {
 
 	std::ofstream ofs_res_i2(ofilename_i2.str().c_str());
 
-	ofs_res_i2 << "#relative distance \t V_matrix \t position " << position*1.0*LATTICE_SIZE / NX << "\n";
+	ofs_res_i2 << "#relative distance \t 1-V_matrix \t error \n";
 
 	// re________
 	//  |  |     |
@@ -2769,8 +2772,16 @@ void JIMWLK_test(int position) {
 	//  |________|
 	//     position
 	for (int re = 1; re < NX / 2; ++re) {
-		ofs_res_i2 << relative_distance[re] << "\t" << trace_V[NX*(NX/2-position)+re+NX/2].real()/(double(number_of_comfig - initial_number)) << "\n";
+		ofs_res_i2 << setprecision(10) << relative_distance[re] << "\t" << trace_V[NX*(NX/2-position)+re+NX/2].real()/(double(number_of_comfig - initial_number))
+			<< "\t" << sqrt( -trace_V[NX*(NX / 2 - position) + re + NX / 2].real() / (double(number_of_comfig - initial_number))
+				*trace_V[NX*(NX / 2 - position) + re + NX / 2].real() / (double(number_of_comfig - initial_number))
+				+ trace_V_square[NX*(NX / 2 - position) + re + NX / 2] / (double(number_of_comfig - initial_number)) )
+			/sqrt((double(number_of_comfig - initial_number)) -1.0) << "\n";
 	}
+
+	delete[]trace_V;
+	delete[]trace_V_square;
+	delete[]trace_V_temp;
 }
 
 void JIMWLK_test_analytical(int position) {
@@ -2797,27 +2808,58 @@ void JIMWLK_test_analytical(int position) {
 
 #pragma omp parallel for num_threads(6)
 	for (int re = 0; re < NX / 2; re++) {
-		if (double(re) < double(NX*1.0 / 6.0)) {
+		if (double(re) <= double(NX*1.0 / 6.0)) {
 			D_matrix[re] = std::complex<double>(-1.0/Nc,0.0);
 		}
 		else {
 
 			for (int ix = 0; ix < NX; ix++) {
 				for (int iy = 0; iy < NX; iy++) {
-					if(double(re + NX / 2.0-ix) > double(NX / 3.0) && double(re + NX / 2.0-ix)<double(2.0*NX / 3.0) 
-						&& double( NX / 2.0 - position-iy) > double(NX / 3.0)  && double( NX / 2.0 - position-iy) < double(2.0*NX / 3.0) ){
-						D_matrix[re] += std::complex<double>(modified_bessel1(mass*abs(x[NX*iy + ix] * x[NX*iy + ix] + y[NX*iy + ix] * y[NX*iy + ix]))
-							*modified_bessel1(mass*abs(x[NX*iy + ix] * x[NX*iy + ix] + y[NX*iy + ix] * y[NX*iy + ix])),0.0);
+					//if(double(re + NX / 2.0-ix) > double(NX / 3.0) && double(re + NX / 2.0-ix)<double(2.0*NX / 3.0) 
+					//	&& double( NX / 2.0 - position-iy) > double(NX / 3.0)  && double( NX / 2.0 - position-iy) < double(2.0*NX / 3.0) ){
+					//	D_matrix[re] += std::complex<double>(modified_bessel1(mass*sqrt(x[NX*iy + ix] * x[NX*iy + ix] + y[NX*iy + ix] * y[NX*iy + ix]))
+					//		*modified_bessel1(mass*sqrt(x[NX*iy + ix] * x[NX*iy + ix] + y[NX*iy + ix] * y[NX*iy + ix])),0.0);
+					//}
+					//else {
+
+					//	D_matrix[re] +=0.0;
+					//}
+					double simpson1 = 1.0;
+					double simpson2 = 1.0;
+					if (iy == 0 || iy == NX - 1) {
+						simpson1 = 1.0 / 3.0;
+					}
+					else if (iy % 2 == 0) {
+						simpson1 = 2.0 / 3.0;
 					}
 					else {
-
-						D_matrix[re] +=0.0;
+						simpson1 = 4.0 / 3.0;
 					}
+
+					if (ix == 0 || ix == NX - 1) {
+						simpson2 = 1.0 / 3.0;
+					}
+					else if (ix % 2 == 0) {
+						simpson2 = 2.0 / 3.0;
+					}
+					else {
+						simpson2 = 4.0 / 3.0;
+					}
+					D_matrix[re] += std::complex<double>(simpson1*simpson2
+						*modified_bessel1(mass
+									*sqrt((-double(position)*h - x[NX*iy + ix]/3.0) * (-double(position)*h - x[NX*iy + ix]/3.0)
+												+ (double(re)*h - y[NX*iy + ix]/3.0) * (double(re)*h - y[NX*iy + ix]/3.0) ))
+
+						*modified_bessel1(mass
+							*sqrt((-double(position)*h - x[NX*iy + ix] / 3.0) * (-double(position)*h - x[NX*iy + ix] / 3.0)
+								+ (double(re)*h - y[NX*iy + ix] / 3.0) * (double(re)*h - y[NX*iy + ix] / 3.0)))
+						, 0.0);
+
 				}
 			}
 
-			D_matrix[re] = 1.0 - coeff*h*h* D_matrix[re];
-			D_matrix_integ[re]= coeff*h*h* D_matrix[re];
+			D_matrix[re] = 1.0 - coeff*h/3.0*h/3.0* D_matrix[re];
+			D_matrix_integ[re]= coeff*h/3.0*h/3.0* D_matrix[re];
 
 		}
 
@@ -2830,7 +2872,7 @@ void JIMWLK_test_analytical(int position) {
 
 	std::ofstream ofs_res_i2(ofilename_i2.str().c_str());
 
-	ofs_res_i2 << "#relative distance \t V_matrix \t position " << position*1.0*LATTICE_SIZE / NX << "\n";
+	ofs_res_i2 << "#relative distance \t 1-V_matrix \t trV \n";
 
 	// re________
 	//  |  |     |
@@ -2839,10 +2881,114 @@ void JIMWLK_test_analytical(int position) {
 	//  |________|
 	//     position
 	for (int re = 1; re < NX / 2; ++re) {
-		ofs_res_i2 << relative_distance[re] << "\t" << D_matrix[re].real() << "\t" << D_matrix_integ[re].real() << "\n";
+		ofs_res_i2 <<setprecision(10) << relative_distance[re] << "\t" << D_matrix[re].real() << "\t" << D_matrix_integ[re].real() << "\n";
 	}
 
 }
+
+
+void JIMWLK_test_analytical_mini(int position) {
+
+	std::vector<std::complex<double>> D_matrix(NX / 2, 0), D_matrix_integ(NX / 2, 0);
+
+	double h = 1.0*LATTICE_SIZE / NX;
+	std::vector<double> relative_distance(NX / 2, 0);
+	for (int re = 0; re < NX / 2; ++re) {
+		relative_distance[re] = re*h;
+	}
+	std::vector<double> x(NX*NX, 0), y(NX*NX, 0);
+	double   xmax = h *NX / 2.0, xmin = -h*NX / 2.0, ymin = -h*NX / 2.0;
+	for (int j = 0; j < NX; j++) {
+		for (int i = 0; i < NX; i++)
+		{
+			x[NX*j + i] = xmin + i*h;
+			y[NX*j + i] = ymin + j*h;
+		}
+	}
+
+	double number_rapidity = 0.01 / 3.0;
+	double coeff = (double(Nc*Nc - 1.0)) / 2.0 / (double(Nc))*ALPHA_S / M_PI / M_PI*number_rapidity*mass*mass;
+
+#pragma omp parallel for num_threads(6)
+	for (int re = 0; re < NX / 2; re++) {
+		if (double(re) <= double(NX*1.0 / 6.0)) {
+			D_matrix[re] = std::complex<double>(-1.0 / Nc, 0.0);
+		}
+		else {
+
+			for (int ix = NX / 3+1; ix < 2*NX / 3; ix++) {
+				for (int iy = NX / 3+1; iy < 2*NX / 3; iy++) {
+					//if(double(re + NX / 2.0-ix) > double(NX / 3.0) && double(re + NX / 2.0-ix)<double(2.0*NX / 3.0) 
+					//	&& double( NX / 2.0 - position-iy) > double(NX / 3.0)  && double( NX / 2.0 - position-iy) < double(2.0*NX / 3.0) ){
+					//	D_matrix[re] += std::complex<double>(modified_bessel1(mass*sqrt(x[NX*iy + ix] * x[NX*iy + ix] + y[NX*iy + ix] * y[NX*iy + ix]))
+					//		*modified_bessel1(mass*sqrt(x[NX*iy + ix] * x[NX*iy + ix] + y[NX*iy + ix] * y[NX*iy + ix])),0.0);
+					//}
+					//else {
+
+					//	D_matrix[re] +=0.0;
+					//}
+					double simpson1 = 1.0;
+					double simpson2 = 1.0;
+					if (iy == NX / 3 + 1 || iy == 2*NX / 3 - 1) {
+						simpson1 = 1.0 / 3.0;
+					}
+					else if (iy % 2 == 0) {
+						simpson1 = 2.0 / 3.0;
+					}
+					else {
+						simpson1 = 4.0 / 3.0;
+					}
+
+					if (ix == NX / 3 + 1 || ix == 2*NX / 3 - 1) {
+						simpson2 = 1.0 / 3.0;
+					}
+					else if (ix % 2 == 0) {
+						simpson2 = 2.0 / 3.0;
+					}
+					else {
+						simpson2 = 4.0 / 3.0;
+					}
+					D_matrix[re] += std::complex<double>(simpson1*simpson2
+						*modified_bessel1(mass
+							*sqrt((-double(position)*h - x[NX*iy + ix] ) * (-double(position)*h - x[NX*iy + ix])
+								+ (double(re)*h - y[NX*iy + ix] ) * (double(re)*h - y[NX*iy + ix] )))
+
+						*modified_bessel1(mass
+							*sqrt((-double(position)*h - x[NX*iy + ix] ) * (-double(position)*h - x[NX*iy + ix] )
+								+ (double(re)*h - y[NX*iy + ix] ) * (double(re)*h - y[NX*iy + ix] )))
+						, 0.0);
+
+				}
+			}
+
+			D_matrix[re] = 1.0 - coeff*h *h * D_matrix[re];
+			D_matrix_integ[re] = coeff*h *h * D_matrix[re];
+
+		}
+
+	}
+
+
+	std::ostringstream ofilename_i2;
+	ofilename_i2 << "G:\\hagiyoshi\\Data\\JIMWLK\\output\\trV_inner_analytic_mini_position_RP_" << position << "_NX_" << NX << "_Nini_" << INITIAL_N
+		<< ".txt";
+
+	std::ofstream ofs_res_i2(ofilename_i2.str().c_str());
+
+	ofs_res_i2 << "#relative distance \t 1-V_matrix \t trV \n";
+
+	// re________
+	//  |  |     |
+	//  |  |__   |
+	//  |        |
+	//  |________|
+	//     position
+	for (int re = 1; re < NX / 2; ++re) {
+		ofs_res_i2 << setprecision(10) << relative_distance[re] << "\t" << D_matrix[re].real() << "\t" << D_matrix_integ[re].real() << "\n";
+	}
+
+}
+
 
 int main()
 {
@@ -2865,7 +3011,7 @@ int main()
 	Generator_SU3_initializer();
 	//assemble_initial_Quark_position(number_of_comfig);
 	//position * LATTICE_IZE/NX = impact_parameter
-	int position = 8;
+	int position = 32;
 	int maxrap = 0;
 	//Calculate_D_matrix(position,maxrap);
 	//Calculate_onepoint_matrix(position, maxrap);
@@ -2873,7 +3019,8 @@ int main()
 	//Integration_Smatrix_towards_Wigner(V_initial, maxrap);
 	//JIMWLK_test(position);
 
-	JIMWLK_test_analytical(position);
+	//JIMWLK_test_analytical(position);
+	//JIMWLK_test_analytical_mini(position);
 	//MV_model_calculation_of_T_matrix();
 	//MV_model_calculation_of_V_matrix(position);
 
