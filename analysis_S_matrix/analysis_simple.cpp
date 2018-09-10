@@ -34,8 +34,8 @@ extern const double g2_mu_Rp = 30.0;
 extern const double m_Rp = 2.0;
 extern const double mass = m_Rp / Rp;
 
-int number_of_comfig = 2500;
-int initial_number = 1500;
+int number_of_comfig = 1000;
+int initial_number = 0;
 //lattice rotational symmetry -||-
 int number_of_symmetry = 4;
 
@@ -2274,8 +2274,15 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 
 
 		std::ostringstream ofilename_Wigner, ofilename_Wigner_all;
+#ifdef  Round_Proton
+		ofilename_Wigner << "G:\\hagiyoshi\\Data\\JIMWLK\\output\\DPE_WWEE_Wigner_diag_woaa_RP_NX_" << NX << "_size_" << LATTICE_SIZE
+			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
+
+#else //  Round_Proton
 		ofilename_Wigner << "G:\\hagiyoshi\\Data\\JIMWLK\\output\\DPE_WWEE_Wigner_diag_woaa_NX_" << NX << "_size_" << LATTICE_SIZE
 			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
+#endif
+
 		std::ofstream ofs_res_Wigner(ofilename_Wigner.str().c_str());
 
 		ofs_res_Wigner << "#b \t momk \t DP \t WW \t DP error \t WW error \n";
@@ -2284,9 +2291,11 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 			double momk = P_UPPER / num_mom*mom;
 			for (int j = 0; j < NX / 2; j++) {
 
-				ofs_res_Wigner << b_spaceS[j] << "\t" << momk << "\t" << WignerS[NX / 2 *mom + j] << "\t" << EWignerS[NX / 2 *mom + j]
-					<< "\t" << sqrt(WignerS2[NX / 2 * mom + j] - WignerS[NX / 2 * mom + j]* WignerS[NX / 2 * mom + j])/sqrt(((double)(number_of_comfig - initial_number)))
-					<< "\t" <<sqrt(EWignerS2[NX / 2 * mom + j] - EWignerS[NX / 2 * mom + j]* EWignerS[NX / 2 * mom + j]) / sqrt(((double)(number_of_comfig - initial_number)))
+				ofs_res_Wigner << std::setprecision(10) << b_spaceS[j] << "\t" << momk << "\t" << WignerS[NX / 2 *mom + j] << "\t" << EWignerS[NX / 2 *mom + j]
+					<< "\t" << sqrt(WignerS2[NX / 2 * mom + j] - WignerS[NX / 2 * mom + j]* WignerS[NX / 2 * mom + j])
+								/sqrt(((double)(number_of_comfig - initial_number-1.0)))
+					<< "\t" <<sqrt(EWignerS2[NX / 2 * mom + j] - EWignerS[NX / 2 * mom + j]* EWignerS[NX / 2 * mom + j]) 
+								/ sqrt(((double)(number_of_comfig - initial_number-1.0)))
 					<< "\n";
 			}
 			ofs_res_Wigner << "\n";
