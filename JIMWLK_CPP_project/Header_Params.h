@@ -26,7 +26,7 @@
 #define ALPHA_S	0.3
 //#define v_Parameter	0.3
 
-#define Round_Proton
+//#define Round_Proton
 
 #define NUMBER512
 

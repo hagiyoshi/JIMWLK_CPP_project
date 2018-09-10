@@ -1025,22 +1025,22 @@ int main()
 	Generator_SU3_initializer();
 	double   x_CQ[Nc], y_CQ[Nc];
 
-	for (int num = 0; num <= 99; num++) {
+	for (int num = 0; num <= 1000; num++) {
 
 		rapidity = 0.0;
 
 		//locate the quark in the proton
 		//Initial_quark_position(x_CQ, y_CQ);
 
-		//Calculate_initial_condition_wo_stack_overflow(V_initial, x_CQ, y_CQ);
+		Calculate_initial_condition_wo_stack_overflow(V_initial, x_CQ, y_CQ);
 		//Initialize_unit_matrix( V_initial);
-		Initialize_unit_matrix_outside_sqare_proton(V_initial);
+		//Initialize_unit_matrix_outside_sqare_proton(V_initial);
 
 		double next_rapidity = 0.0;
 
 #ifdef Round_Proton
 
-		//print_1_V_round_proton(V_initial, rapidity, num);
+		print_1_V_round_proton(V_initial, rapidity, num);
 #else
 
 		print_1_V(V_initial, x_CQ, y_CQ, rapidity, num);
@@ -1060,7 +1060,7 @@ int main()
 			}
 #ifdef Round_Proton
 
-			//print_1_V_round_proton(V_initial, rapidity, num);
+			print_1_V_round_proton(V_initial, rapidity, num);
 #else
 
 			print_1_V(V_initial, x_CQ, y_CQ, rapidity, num);
@@ -1068,20 +1068,20 @@ int main()
 
 
 			//print_1_V_initial_unit(V_initial, rapidity);
-			print_1_V_initial_unit_outside_sqare_proton(V_initial, rapidity, num);
+			//print_1_V_initial_unit_outside_sqare_proton(V_initial, rapidity, num);
 		}
 
 
 #ifdef Round_Proton
 
-		//print_1_V_round_proton(V_initial, rapidity, num);
+		print_1_V_round_proton(V_initial, rapidity, num);
 #else
 
 		print_1_V(V_initial, x_CQ, y_CQ, rapidity, num);
 #endif // Round_Proton
 
 		//print_1_V_initial_unit(V_initial, rapidity);
-		print_1_V_initial_unit_outside_sqare_proton(V_initial, rapidity, num);
+		//print_1_V_initial_unit_outside_sqare_proton(V_initial, rapidity, num);
 		//Calculation_2D_convolution();
 #endif
 	}

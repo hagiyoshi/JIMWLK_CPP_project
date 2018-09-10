@@ -34,8 +34,8 @@ extern const double g2_mu_Rp = 30.0;
 extern const double m_Rp = 2.0;
 extern const double mass = m_Rp / Rp;
 
-int number_of_comfig = 500;
-int initial_number = 0;
+int number_of_comfig = 2500;
+int initial_number = 1500;
 //lattice rotational symmetry -||-
 int number_of_symmetry = 4;
 
@@ -2147,13 +2147,15 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 		double rapidity = 5.0*rap;
 
 		int num_bspace = 0;
-		std::vector<double> b_space, Wigner, EWigner, b_spaceS(NX / 2, 0), WignerS(num_mom*NX / 2, 0), EWignerS(num_mom*NX / 2, 0);
+		std::vector<double> b_space, Wigner, EWigner, b_spaceS(NX / 2, 0), WignerS(num_mom*NX / 2, 0), EWignerS(num_mom*NX / 2, 0),
+			WignerS2(num_mom*NX / 2, 0), EWignerS2(num_mom*NX / 2, 0);
 
 		for (int mom = 0; mom < num_mom; mom++) {
 			double momk = P_UPPER / num_mom*mom;
 
 
-			std::vector<double> b_positionS(NX / 2, 0), b_integrated_valueS(NX / 2, 0), b_integrated_EvalueS(NX / 2, 0);
+			std::vector<double> b_positionS(NX / 2, 0), b_integrated_valueS(NX / 2, 0), b_integrated_EvalueS(NX / 2, 0),
+				b_integrated_valueS2(NX / 2, 0), b_integrated_EvalueS2(NX / 2, 0), integrand_bnonE2(NX*NX, 0), integrand_bE2(NX*NX, 0);
 
 			std::vector<std::complex<double>> integrand_bnonE(NX*NX, 0), integrand_bE(NX*NX, 0), integrand_temp1(NX*NX, 1), integrand_temp2(NX*NX, 2);
 			for (int num = initial_number; num < number_of_comfig; ++num) {
@@ -2162,9 +2164,13 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 				//Initialize_unit_matrix(V_matrix);
 				nonElliptic(V_matrix, integrand_temp1.data(), integrand_temp2.data(), momk);
 				//Smatrix_value(V_matrix, integrand_temp1.data(), integrand_temp2.data(), momk);
-				for (int n = 0; n < NX*NX; ++n) { integrand_bnonE[n] += integrand_temp1[n]; }
+				for (int n = 0; n < NX*NX; ++n) { integrand_bnonE[n] += integrand_temp1[n]; 
+				integrand_bnonE2[n] += integrand_temp1[n].real();
+				}
 
-				for (int n = 0; n < NX*NX; ++n) { integrand_bE[n] += integrand_temp2[n]; }
+				for (int n = 0; n < NX*NX; ++n) { integrand_bE[n] += integrand_temp2[n]; 
+				integrand_bE2[n] += integrand_temp2[n].real();
+				}
 
 
 			}
@@ -2172,16 +2178,21 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 			for (int n = 0; n < NX*NX; ++n) {
 				integrand_bnonE[n] = integrand_bnonE[n] / ((double)(number_of_comfig - initial_number));
 				integrand_bE[n] = integrand_bE[n] / ((double)(number_of_comfig - initial_number));
+				integrand_bnonE2[n] = integrand_bnonE2[n] / ((double)(number_of_comfig - initial_number));
+				integrand_bE2[n] = integrand_bE2[n] / ((double)(number_of_comfig - initial_number));
 			}
 
 
 
 			double h = 1.0*LATTICE_SIZE / NX;
 
-			std::vector<double> b_position(NX / 2, 0), b_integrated_value(NX / 2, 0), b_integrated_Evalue(NX / 2, 0);
+			std::vector<double> b_position(NX / 2, 0), b_integrated_value(NX / 2, 0), b_integrated_Evalue(NX / 2, 0),
+				b_integrated_value2(NX / 2, 0), b_integrated_Evalue2(NX / 2, 0);
 			double impact_paramb = 0;
 			double integrated = 0;
 			double integratedE = 0;
+			double integrated2 = 0;
+			double integratedE2 = 0;
 			//x axis
 			for (int i = 1; i <= NX / 2; i++) {
 
@@ -2191,6 +2202,11 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 				integratedE = (integrand_bE[NX*i + i].real() + integrand_bE[NX*(NX - i) + NX  - i].real()
 					+ integrand_bE[NX*i + NX - i].real() + integrand_bE[NX*(NX - i) + i].real()) / 4.0;
 
+				integrated2 = (integrand_bnonE2[NX*i + i] + integrand_bnonE2[NX*(NX - i) + NX - i]
+					+ integrand_bnonE2[NX*i + NX - i] + integrand_bnonE2[NX*(NX - i) + i]) / 4.0;
+				integratedE2 = (integrand_bE2[NX*i + i] + integrand_bE2[NX*(NX - i) + NX - i]
+					+ integrand_bE2[NX*i + NX - i] + integrand_bE2[NX*(NX - i) + i]) / 4.0;
+
 
 				//b_positionS[NX / 2 - i ] = impact_paramb;
 				//b_integrated_valueS[NX / 2 - i ] = integrated;
@@ -2199,6 +2215,9 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 				b_positionS[NX / 2 - i] = impact_paramb;
 				b_integrated_valueS[NX / 2 - i] = integrand_bnonE[NX*i + i].real();
 				b_integrated_EvalueS[NX / 2 - i] = integrand_bE[NX*i + i].real();
+
+				b_integrated_valueS2[NX / 2 - i] = integrand_bnonE2[NX*i + i];
+				b_integrated_EvalueS2[NX / 2 - i] = integrand_bE2[NX*i + i];
 
 			}
 
@@ -2212,6 +2231,10 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 				WignerS[NX / 2 *mom + i] = b_integrated_valueS[i];
 
 				EWignerS[NX / 2 *mom + i] = b_integrated_EvalueS[i];
+
+				WignerS2[NX / 2 * mom + i] = b_integrated_valueS2[i];
+
+				EWignerS2[NX / 2 * mom + i] = b_integrated_EvalueS2[i];
 			}
 
 
@@ -2255,13 +2278,16 @@ void Derive_Wigner_distribution_DP_WW_diagonal(std::complex<double>* V_matrix, i
 			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
 		std::ofstream ofs_res_Wigner(ofilename_Wigner.str().c_str());
 
-		ofs_res_Wigner << "#b \t momk \t DP \t WW \n";
+		ofs_res_Wigner << "#b \t momk \t DP \t WW \t DP error \t WW error \n";
 
 		for (int mom = 0; mom < num_mom; mom++) {
 			double momk = P_UPPER / num_mom*mom;
 			for (int j = 0; j < NX / 2; j++) {
 
-				ofs_res_Wigner << b_spaceS[j] << "\t" << momk << "\t" << WignerS[NX / 2 *mom + j] << "\t" << EWignerS[NX / 2 *mom + j] << "\n";
+				ofs_res_Wigner << b_spaceS[j] << "\t" << momk << "\t" << WignerS[NX / 2 *mom + j] << "\t" << EWignerS[NX / 2 *mom + j]
+					<< "\t" << sqrt(WignerS2[NX / 2 * mom + j] - WignerS[NX / 2 * mom + j]* WignerS[NX / 2 * mom + j])/sqrt(((double)(number_of_comfig - initial_number)))
+					<< "\t" <<sqrt(EWignerS2[NX / 2 * mom + j] - EWignerS[NX / 2 * mom + j]* EWignerS[NX / 2 * mom + j]) / sqrt(((double)(number_of_comfig - initial_number)))
+					<< "\n";
 			}
 			ofs_res_Wigner << "\n";
 		}
@@ -2526,7 +2552,7 @@ void Wigner_DP_WW_diagonal(std::complex<double>* V_matrix, int max_rap, int num_
 
 		std::ostringstream ofilename_Wigner, ofilename_Wigner_all;
 		ofilename_Wigner << "G:\\hagiyoshi\\Data\\JIMWLK\\output\\DP_WW_Wigner_diag_direct_NX_" << NX << "_size_" << LATTICE_SIZE
-			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
+			<< "_Nini_" << INITIAL_N << "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
 		std::ofstream ofs_res_Wigner(ofilename_Wigner.str().c_str());
 
 		ofs_res_Wigner << "#b \t momk \t DP \t WW \n";
@@ -3026,11 +3052,11 @@ int main()
 
 	//calculate_c_2_4(maxrap);
 
-	int maxmom = 40;
+	int maxmom = 4;
 	//Derive_Wigner_distribution_revised(V_initial, maxrap,maxmom);
 	//Derive_Wigner_distribution_fromSmatrix(V_initial, maxrap, maxmom);
 	//Derive_Wigner_distribution_DP_WW(V_initial, maxrap, maxmom);
-	//Derive_Wigner_distribution_DP_WW_diagonal(V_initial, maxrap, maxmom);
+	Derive_Wigner_distribution_DP_WW_diagonal(V_initial, maxrap, maxmom);
 	//Wigner_DP_WW_diagonal(V_initial, maxrap, maxmom);
 	//Derive_TMD_DP(V_initial, maxrap);
 	//Derive_TMD_DP_direct(V_initial, maxrap);
