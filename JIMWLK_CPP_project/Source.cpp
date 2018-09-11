@@ -168,9 +168,9 @@ void noise_generation(double* noise)
 
 double Sqrt_Constituent_Quark_Density(const double x, const double y, const double *x_CQ, const double *y_CQ)
 {
-	double coefficient = 3.0 / (2.0*M_PI*R_CQ*R_CQ);
+	double coefficient = 1.0 / (2.0*M_PI*R_CQ*R_CQ)/3.0;
 	double density = 0;
-	double coeff_exp = -3.0 / (2.0*R_CQ*R_CQ);
+	double coeff_exp = -1.0 / (2.0*R_CQ*R_CQ);
 	for (int i = 0; i < 3; i++) {
 		//double x_sub_x_CQ = x - x_CQ[i];
 		//double y_sub_y_CQ = y - y_CQ[i];
@@ -1025,12 +1025,12 @@ int main()
 	Generator_SU3_initializer();
 	double   x_CQ[Nc], y_CQ[Nc];
 
-	for (int num = 0; num <= 1000; num++) {
+	for (int num = 0; num <= 100; num++) {
 
 		rapidity = 0.0;
 
 		//locate the quark in the proton
-		//Initial_quark_position(x_CQ, y_CQ);
+		Initial_quark_position(x_CQ, y_CQ);
 
 		Calculate_initial_condition_wo_stack_overflow(V_initial, x_CQ, y_CQ);
 		//Initialize_unit_matrix( V_initial);

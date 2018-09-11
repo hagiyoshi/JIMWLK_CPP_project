@@ -3,8 +3,8 @@
 //#define OUTPUT_FT_NOISE
 #define EVOLUTION
 
-#define END_Y	0.01/3.0
-#define OUTPUT_Y	0.01/3.0
+#define END_Y	10.0
+#define OUTPUT_Y	0.1
 #define DELTA_Y	0.01/3.0
 #define EPS 1.0e-8
 

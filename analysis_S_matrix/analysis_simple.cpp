@@ -34,7 +34,7 @@ extern const double g2_mu_Rp = 30.0;
 extern const double m_Rp = 2.0;
 extern const double mass = m_Rp / Rp;
 
-int number_of_comfig = 1000;
+int number_of_comfig = 500;
 int initial_number = 0;
 //lattice rotational symmetry -||-
 int number_of_symmetry = 4;
@@ -2355,10 +2355,20 @@ void Derive_TMD_DP(std::complex<double>* V_matrix, int max_rap)
 			*((double)LATTICE_SIZE) / ((double)NX)*((double)LATTICE_SIZE) / ((double)NX);
 
 		std::ostringstream ofilename_Wigner,diagonal;
+#ifdef Round_Proton
+
+		ofilename_Wigner << "nonnormalized_DP_TMD_RP_NX_" << NX << "_size_" << LATTICE_SIZE
+			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
+		diagonal << "nonnormalized_DP_TMD_diagonal_RP_NX_" << NX << "_size_" << LATTICE_SIZE
+			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
+#else
+
 		ofilename_Wigner << "nonnormalized_DP_TMD_NX_" << NX << "_size_" << LATTICE_SIZE
 			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
 		diagonal << "nonnormalized_DP_TMD_diagonal_NX_" << NX << "_size_" << LATTICE_SIZE
 			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
+#endif // Round_Proton
+
 		std::ofstream ofs_res_Wigner(ofilename_Wigner.str().c_str());
 		std::ofstream ofs_res_diagonal(diagonal.str().c_str());
 
@@ -3065,9 +3075,9 @@ int main()
 	//Derive_Wigner_distribution_revised(V_initial, maxrap,maxmom);
 	//Derive_Wigner_distribution_fromSmatrix(V_initial, maxrap, maxmom);
 	//Derive_Wigner_distribution_DP_WW(V_initial, maxrap, maxmom);
-	Derive_Wigner_distribution_DP_WW_diagonal(V_initial, maxrap, maxmom);
+	//Derive_Wigner_distribution_DP_WW_diagonal(V_initial, maxrap, maxmom);
 	//Wigner_DP_WW_diagonal(V_initial, maxrap, maxmom);
-	//Derive_TMD_DP(V_initial, maxrap);
+	Derive_TMD_DP(V_initial, maxrap);
 	//Derive_TMD_DP_direct(V_initial, maxrap);
 	//Derive_GPD_direct(V_initial, maxrap);
 	//MV_Wigner(maxmom);
