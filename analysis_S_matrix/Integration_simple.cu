@@ -3383,12 +3383,17 @@ __global__ void normalorderinksp_function(cuDoubleComplex *ftout, cuDoubleComple
 
 void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* integrated_resultDP, std::complex<double>* integrated_resultWW)
 {
+	cudaError_t erri = cudaGetLastError();
+	if (erri != cudaSuccess) {
+		fprintf(stderr, "kernel launch failedi: %s\n", cudaGetErrorString(erri));
+		exit(-1);
+	}
 	int N = NX;
 	double h = 1.0*LATTICE_SIZE / NX;
 	double   xmax = h *N / 2.0, xmin = -h*N / 2.0, ymin = -h*N / 2.0,
 		s = 0.1, s2 = s*s;
 	double   *x = new double[N*N], *y = new double[N*N],
-		*f = new double[N*N], *u_a = new double[N*N];
+		*f = new double[N*N];
 	double r2;
 	for (int j = 0; j < N; j++) {
 		for (int i = 0; i < N; i++)
@@ -3411,6 +3416,7 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 		k[i] = (i - N) * 2.0 * M_PI / LATTICE_SIZE;
 	}
 
+	
 	// Allocate arrays on the device
 	double *k_d ,*x_d, *y_d;
 	cudaMalloc((void**)&k_d, sizeof(double)*N);
@@ -3419,6 +3425,7 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 	cudaMemcpy(k_d, k, sizeof(double)*N, cudaMemcpyHostToDevice);
 	cudaMemcpy(x_d, x, sizeof(double)*N*N, cudaMemcpyHostToDevice);
 	cudaMemcpy(y_d, y, sizeof(double)*N*N, cudaMemcpyHostToDevice);
+
 
 	cuDoubleComplex *V_matrix_d;
 	cudaMalloc((void**)&V_matrix_d, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
@@ -3430,6 +3437,8 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 
 	//dim3 dimGridS(int((N / 8 - 0.5) / BSZ) + 1, int((N / 8 - 0.5) / BSZ) + 1);
 	//dim3 dimBlockS(BSZ, BSZ);
+
+	
 
 	dim3 dimGrid(int((N - 0.5) / BSZ) + 1, int((N - 0.5) / BSZ) + 1);
 	dim3 dimBlock(BSZ, BSZ);
@@ -3457,6 +3466,7 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 	//Udagger_Dfferential_U_short <<<dimGridS, dimBlockS >>> (VdDxV_matrix, VdDyV_matrix, V_matrix_d, h, N/8);
 	Udagger_Dfferential_U <<<dimGrid, dimBlock >>> (VdDxV_matrix, VdDyV_matrix, V_matrix_d, h, N);
 	Udagger_Dfferential_U_make_unitarity <<<dimGrid, dimBlock >>> (uVdDxV_matrix, uVdDyV_matrix, VdDxV_matrix, VdDyV_matrix, N);
+
 
 	cuDoubleComplex *ftx_d,*fty_d, *ftux_d, *ftuy_d,*ftxo_d, *ftyo_d, *ftuxo_d, *ftuyo_d;
 	cudaMalloc((void**)&ftx_d, sizeof(cuDoubleComplex)*N*N);
@@ -3497,7 +3507,7 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 			cufftExecZ2Z(plan, uVdDyV_index, ftuy_d, CUFFT_FORWARD);
 			cudaError_t err2 = cudaGetLastError();
 			if (err2 != cudaSuccess) {
-				fprintf(stderr, "kernel launch failed: %s\n", cudaGetErrorString(err2));
+				fprintf(stderr, "kernel launch failed2: %s\n", cudaGetErrorString(err2));
 				exit(-1);
 			}
 
@@ -3509,6 +3519,12 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 			getGTMD_function <<<dimGrid, dimBlock >>> (ftxo_d, ftyo_d, Integrated_d, NX / 2, NX / 2);
 			getGTMD_function <<<dimGrid, dimBlock >>> (ftuxo_d, ftuyo_d, Integrated2_d, NX / 2, NX / 2);
 
+			cudaError_t err3 = cudaGetLastError();
+			if (err3 != cudaSuccess) {
+				fprintf(stderr, "kernel launch failed3: %s\n", cudaGetErrorString(err3));
+				exit(-1);
+			}
+
 		}
 	}
 
@@ -3517,6 +3533,11 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 
 	cudaMemcpy(integrated_resultWW, Integrated2_d, sizeof(std::complex<double>)*N*N/4, cudaMemcpyDeviceToHost);
 
+	cudaError_t errf = cudaGetLastError();
+	if (errf != cudaSuccess) {
+		fprintf(stderr, "kernel launch failedf: %s\n", cudaGetErrorString(errf));
+		exit(-1);
+	}
 
 	cudaFree(k_d);
 	cudaFree(x_d);
@@ -3536,17 +3557,16 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 	cudaFree(DyV_matrix);
 	cudaFree(DxV_index);
 	cudaFree(DyV_index);
-	cudaFree(DxV_index);
-	cudaFree(DyV_index);
 	cudaFree(VdDxV_matrix);
 	cudaFree(VdDyV_matrix);
+	cudaFree(uVdDxV_matrix);
+	cudaFree(uVdDyV_matrix);
 	cudaFree(uVdDxV_index);
 	cudaFree(uVdDyV_index);
 	delete[](k);
 	delete[](x);
 	delete[](y);
 	delete[](f);
-	delete[](u_a);
 }
 
 

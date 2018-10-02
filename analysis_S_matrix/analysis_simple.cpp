@@ -34,7 +34,7 @@ extern const double g2_mu_Rp = 30.0;
 extern const double m_Rp = 2.0;
 extern const double mass = m_Rp / Rp;
 
-int number_of_comfig = 80;
+int number_of_comfig = 5;
 int initial_number = 0;
 //lattice rotational symmetry -||-
 int number_of_symmetry = 4;
