@@ -2947,12 +2947,16 @@ void TMD_value(std::complex<double>* V_matrix, std::complex<double>* integrated_
 	//Take_Uzero <<<dimGrid, dimBlock >>> (DxV_matrix, DyV_matrix, V_matrix_d, h, N);
 
 
-	//cuDoubleComplex *VdDxV_matrix, *VdDyV_matrix;
-	//cudaMalloc((void**)&VdDxV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
-	//cudaMalloc((void**)&VdDyV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cuDoubleComplex *VdDxV_matrix, *VdDyV_matrix;
+	cudaMalloc((void**)&VdDxV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cudaMalloc((void**)&VdDyV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cuDoubleComplex *uVdDxV_matrix, *uVdDyV_matrix;
+	cudaMalloc((void**)&uVdDxV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cudaMalloc((void**)&uVdDyV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
 
 	//Udagger_Dfferential_U_short <<<dimGridS, dimBlockS >>> (VdDxV_matrix, VdDyV_matrix, V_matrix_d, h, N/8);
-	//Udagger_Dfferential_U <<<dimGrid, dimBlock >>> (VdDxV_matrix, VdDyV_matrix, V_matrix_d, h, N);
+	Udagger_Dfferential_U <<<dimGrid, dimBlock >>> (VdDxV_matrix, VdDyV_matrix, V_matrix_d, h, N);
+	Udagger_Dfferential_U_make_unitarity <<<dimGrid, dimBlock >>> (uVdDxV_matrix, uVdDyV_matrix, VdDxV_matrix, VdDyV_matrix, N);
 
 	cuDoubleComplex *ft_d,*ftx_d,*fty_d;
 	cudaMalloc((void**)&ft_d, sizeof(cuDoubleComplex)*N*N);
@@ -3026,8 +3030,10 @@ void TMD_value(std::complex<double>* V_matrix, std::complex<double>* integrated_
 	cudaFree(DyV_matrix);
 	cudaFree(DxV_index);
 	cudaFree(DyV_index);
-	//cudaFree(VdDxV_matrix);
-	//cudaFree(VdDyV_matrix);
+	cudaFree(VdDxV_matrix);
+	cudaFree(VdDyV_matrix);
+	cudaFree(uVdDxV_matrix);
+	cudaFree(uVdDyV_matrix);
 	delete[](k);
 	delete[](x);
 	delete[](y);
@@ -3332,6 +3338,210 @@ void Wigner_direct(std::complex<double>* V_matrix, std::complex<double>* integra
 	cudaFree(VdDyV_index);
 	cudaFree(uVdDxV_matrix);
 	cudaFree(uVdDyV_matrix);
+	delete[](k);
+	delete[](x);
+	delete[](y);
+	delete[](f);
+	delete[](u_a);
+}
+
+
+__global__ void getGTMD_function(cuDoubleComplex *ftx, cuDoubleComplex *fty,
+	cuDoubleComplex *Integrated, int N,int Ny)
+{
+	int i = threadIdx.x + blockIdx.x*blockDim.x;
+	int j = threadIdx.y + blockIdx.y*blockDim.y;
+	int index = j * N + i;
+	if (i < N && j < N)
+	{
+		Integrated[index] = cuCadd(Integrated[index], cuCmul(ftx[Ny*NX+j+i], fty[Ny*NX +NX/2 - j + i]));
+	}
+}
+
+
+__global__ void normalorderinksp_function(cuDoubleComplex *ftout, cuDoubleComplex *ftin, int N)
+{
+	int i = threadIdx.x + blockIdx.x*blockDim.x;
+	int j = threadIdx.y + blockIdx.y*blockDim.y;
+	int index = j * N + i;
+	if (i < N && j < N)
+	{
+		if (j > N / 2 && i > N / 2) {
+			ftout[index] = ftin[(j - N / 2 - 1)*N + i - N / 2 - 1];
+		} else if (j <= N / 2 && i > N / 2) {
+			ftout[index] = ftin[(j + N / 2 + 1)*N + i - N / 2 - 1];
+		}
+		else if (j > N / 2 && i <= N / 2) {
+			ftout[index] = ftin[(j - N / 2 - 1)*N + i + N / 2 + 1];
+		}
+		else {
+			ftout[index] = ftin[(j + N / 2 + 1)*N + i + N / 2 + 1];
+		}
+	}
+}
+
+
+void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* integrated_resultDP, std::complex<double>* integrated_resultWW)
+{
+	int N = NX;
+	double h = 1.0*LATTICE_SIZE / NX;
+	double   xmax = h *N / 2.0, xmin = -h*N / 2.0, ymin = -h*N / 2.0,
+		s = 0.1, s2 = s*s;
+	double   *x = new double[N*N], *y = new double[N*N],
+		*f = new double[N*N], *u_a = new double[N*N];
+	double r2;
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			x[N*j + i] = xmin + i*h;
+			y[N*j + i] = ymin + j*h;
+			//f[N*j + i] = ;
+		}
+	}
+
+	cuDoubleComplex test= make_cuDoubleComplex(0.0, 0.0);
+
+	double   *k = new double[N];
+	for (int i = 0; i <= N / 2; i++)
+	{
+		k[i] = i * 2.0 * M_PI / LATTICE_SIZE;
+	}
+	for (int i = N / 2 + 1; i < N; i++)
+	{
+		k[i] = (i - N) * 2.0 * M_PI / LATTICE_SIZE;
+	}
+
+	// Allocate arrays on the device
+	double *k_d ,*x_d, *y_d;
+	cudaMalloc((void**)&k_d, sizeof(double)*N);
+	cudaMalloc((void**)&x_d, sizeof(double)*N*N);
+	cudaMalloc((void**)&y_d, sizeof(double)*N*N);
+	cudaMemcpy(k_d, k, sizeof(double)*N, cudaMemcpyHostToDevice);
+	cudaMemcpy(x_d, x, sizeof(double)*N*N, cudaMemcpyHostToDevice);
+	cudaMemcpy(y_d, y, sizeof(double)*N*N, cudaMemcpyHostToDevice);
+
+	cuDoubleComplex *V_matrix_d;
+	cudaMalloc((void**)&V_matrix_d, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cudaMemcpy(V_matrix_d, V_matrix, sizeof(std::complex<double>) * 3 * 3 * N*N, cudaMemcpyHostToDevice);
+
+	cuDoubleComplex *Integrated_d, *Integrated2_d;
+	cudaMalloc((void**)&Integrated_d, sizeof(cuDoubleComplex)*N*N/4);
+	cudaMalloc((void**)&Integrated2_d, sizeof(cuDoubleComplex)*N*N/4);
+
+	//dim3 dimGridS(int((N / 8 - 0.5) / BSZ) + 1, int((N / 8 - 0.5) / BSZ) + 1);
+	//dim3 dimBlockS(BSZ, BSZ);
+
+	dim3 dimGrid(int((N - 0.5) / BSZ) + 1, int((N - 0.5) / BSZ) + 1);
+	dim3 dimBlock(BSZ, BSZ);
+
+	cuDoubleComplex *DxV_matrix, *DyV_matrix, *DxV_index, *DyV_index;
+	cudaMalloc((void**)&DxV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cudaMalloc((void**)&DyV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cudaMalloc((void**)&DxV_index, sizeof(cuDoubleComplex)  * N*N);
+	cudaMalloc((void**)&DyV_index, sizeof(cuDoubleComplex)  * N*N);
+
+	//Dfferential_U_short <<<dimGridS, dimBlockS >>> (DxV_matrix, DyV_matrix, V_matrix_d, h, N/8);
+	Dfferential_U <<<dimGrid, dimBlock >>> (DxV_matrix, DyV_matrix, V_matrix_d, h, N);
+	//Take_Uzero <<<dimGrid, dimBlock >>> (DxV_matrix, DyV_matrix, V_matrix_d, h, N);
+
+
+	cuDoubleComplex *VdDxV_matrix, *VdDyV_matrix;
+	cudaMalloc((void**)&VdDxV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cudaMalloc((void**)&VdDyV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cuDoubleComplex *uVdDxV_matrix, *uVdDyV_matrix, *uVdDxV_index, *uVdDyV_index;
+	cudaMalloc((void**)&uVdDxV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cudaMalloc((void**)&uVdDyV_matrix, sizeof(cuDoubleComplex) * 3 * 3 * N*N);
+	cudaMalloc((void**)&uVdDxV_index, sizeof(cuDoubleComplex)  * N*N);
+	cudaMalloc((void**)&uVdDyV_index, sizeof(cuDoubleComplex)  * N*N);
+
+	//Udagger_Dfferential_U_short <<<dimGridS, dimBlockS >>> (VdDxV_matrix, VdDyV_matrix, V_matrix_d, h, N/8);
+	Udagger_Dfferential_U <<<dimGrid, dimBlock >>> (VdDxV_matrix, VdDyV_matrix, V_matrix_d, h, N);
+	Udagger_Dfferential_U_make_unitarity <<<dimGrid, dimBlock >>> (uVdDxV_matrix, uVdDyV_matrix, VdDxV_matrix, VdDyV_matrix, N);
+
+	cuDoubleComplex *ftx_d,*fty_d, *ftux_d, *ftuy_d,*ftxo_d, *ftyo_d, *ftuxo_d, *ftuyo_d;
+	cudaMalloc((void**)&ftx_d, sizeof(cuDoubleComplex)*N*N);
+	cudaMalloc((void**)&fty_d, sizeof(cuDoubleComplex)*N*N);
+	cudaMalloc((void**)&ftux_d, sizeof(cuDoubleComplex)*N*N);
+	cudaMalloc((void**)&ftuy_d, sizeof(cuDoubleComplex)*N*N);
+	cudaMalloc((void**)&ftxo_d, sizeof(cuDoubleComplex)*N*N);
+	cudaMalloc((void**)&ftyo_d, sizeof(cuDoubleComplex)*N*N);
+	cudaMalloc((void**)&ftuxo_d, sizeof(cuDoubleComplex)*N*N);
+	cudaMalloc((void**)&ftuyo_d, sizeof(cuDoubleComplex)*N*N);
+
+	
+	initialize_vectors <<<dimGrid, dimBlock >>> (Integrated_d, Integrated2_d, N/2);
+
+	for (int a = 0; a < Nc; a++) {
+		for (int b = 0; b < Nc; b++) {
+
+			index_matrix <<<dimGrid, dimBlock >>> (DxV_index, DxV_matrix, a, b, N);
+			index_matrix <<<dimGrid, dimBlock >>> (DyV_index, DyV_matrix, a, b, N);
+			index_matrix <<<dimGrid, dimBlock >>> (uVdDxV_index, uVdDxV_matrix, a, b, N);
+			index_matrix <<<dimGrid, dimBlock >>> (uVdDyV_index, uVdDyV_matrix, a, b, N);
+			//index_matrix_Gaussian <<<dimGrid, dimBlock >>> (V_index_d, V_matrix_d, x_d, y_d, a, b, N);
+			//index_matrix_Gaussian <<<dimGrid, dimBlock >>> (DxV_index, DxV_matrix,x_d, y_d, a, b, N);
+			//index_matrix_Gaussian <<<dimGrid, dimBlock >>> (DyV_index, DyV_matrix,x_d, y_d, a, b, N);
+			cudaError_t err = cudaGetLastError();
+			if (err != cudaSuccess) {
+				fprintf(stderr, "kernel launch failed: %s\n", cudaGetErrorString(err));
+				exit(-1);
+			}
+
+
+			cufftHandle plan;
+			cufftPlan2d(&plan, N, N, CUFFT_Z2Z);
+
+			cufftExecZ2Z(plan, DxV_index, ftx_d, CUFFT_FORWARD);
+			cufftExecZ2Z(plan, DyV_index, fty_d, CUFFT_FORWARD);
+			cufftExecZ2Z(plan, uVdDxV_index, ftux_d, CUFFT_FORWARD);
+			cufftExecZ2Z(plan, uVdDyV_index, ftuy_d, CUFFT_FORWARD);
+			cudaError_t err2 = cudaGetLastError();
+			if (err2 != cudaSuccess) {
+				fprintf(stderr, "kernel launch failed: %s\n", cudaGetErrorString(err2));
+				exit(-1);
+			}
+
+			normalorderinksp_function <<<dimGrid, dimBlock >>> (ftxo_d, ftx_d,NX);
+			normalorderinksp_function <<<dimGrid, dimBlock >>> (ftyo_d, fty_d, NX);
+			normalorderinksp_function <<<dimGrid, dimBlock >>> (ftuxo_d, ftux_d, NX);
+			normalorderinksp_function <<<dimGrid, dimBlock >>> (ftuyo_d, ftuy_d, NX);
+
+			getGTMD_function <<<dimGrid, dimBlock >>> (ftxo_d, ftyo_d, Integrated_d, NX / 2, NX / 2);
+			getGTMD_function <<<dimGrid, dimBlock >>> (ftuxo_d, ftuyo_d, Integrated2_d, NX / 2, NX / 2);
+
+		}
+	}
+
+
+	cudaMemcpy(integrated_resultDP, Integrated_d, sizeof(std::complex<double>)*N*N/4, cudaMemcpyDeviceToHost);
+
+	cudaMemcpy(integrated_resultWW, Integrated2_d, sizeof(std::complex<double>)*N*N/4, cudaMemcpyDeviceToHost);
+
+
+	cudaFree(k_d);
+	cudaFree(x_d);
+	cudaFree(y_d);
+	cudaFree(ftx_d);
+	cudaFree(fty_d);
+	cudaFree(ftux_d);
+	cudaFree(ftuy_d);
+	cudaFree(ftxo_d);
+	cudaFree(ftyo_d);
+	cudaFree(ftuxo_d);
+	cudaFree(ftuyo_d);
+	cudaFree(Integrated_d);
+	cudaFree(Integrated2_d);
+	cudaFree(V_matrix_d);
+	cudaFree(DxV_matrix);
+	cudaFree(DyV_matrix);
+	cudaFree(DxV_index);
+	cudaFree(DyV_index);
+	cudaFree(DxV_index);
+	cudaFree(DyV_index);
+	cudaFree(VdDxV_matrix);
+	cudaFree(VdDyV_matrix);
+	cudaFree(uVdDxV_index);
+	cudaFree(uVdDyV_index);
 	delete[](k);
 	delete[](x);
 	delete[](y);

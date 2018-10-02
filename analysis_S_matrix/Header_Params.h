@@ -25,7 +25,7 @@
 #define Nc 3
 #define ADJNc 8
 #define ALPHA_S	0.3
-#define P_UPPER 5.0
+#define P_UPPER 10.0
 //#define v_Parameter	0.3
 
 //#define Round_Proton

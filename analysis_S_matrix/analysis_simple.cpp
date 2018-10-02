@@ -34,7 +34,7 @@ extern const double g2_mu_Rp = 30.0;
 extern const double m_Rp = 2.0;
 extern const double mass = m_Rp / Rp;
 
-int number_of_comfig = 500;
+int number_of_comfig = 80;
 int initial_number = 0;
 //lattice rotational symmetry -||-
 int number_of_symmetry = 4;
@@ -3034,6 +3034,81 @@ void JIMWLK_test_analytical_mini(int position) {
 
 }
 
+void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* integrated_resultDP, std::complex<double>* integrated_resultWW);
+
+
+void Derive_GTMD_value(std::complex<double>* V_matrix, int max_rap)
+{
+	//notice!! Wigner:DPWigner, EWigner:WWWigner 
+	double   *k = new double[NX];
+	for (int i = 0; i < NX; i++)
+	{
+		k[i] = i * 2.0 * M_PI / LATTICE_SIZE;
+	}
+
+	for (int rap = 0; rap <= max_rap; ++rap) {
+		double rapidity = 5.0*rap;
+
+
+		std::vector<std::complex<double>> integrand_bnonE(NX*NX/4, 0), integrand_bE(NX*NX/4, 0), integrand_temp1(NX*NX/4, 1), integrand_temp2(NX*NX/4, 2);
+		for (int num = initial_number; num < number_of_comfig; ++num) {
+			int number = num;
+			Load_matrix_V(V_matrix, rapidity, number);
+			//Initialize_unit_matrix(V_matrix);
+			GTMD_value_simple(V_matrix, integrand_temp1.data(), integrand_temp2.data());
+
+			std::cout << num << "\n";
+
+			//Smatrix_value(V_matrix, integrand_temp1.data(), integrand_temp2.data(), momk);
+#pragma omp parallel for num_threads(6)
+			for (int n = 0; n < NX*NX/4; ++n) { integrand_bnonE[n] += integrand_temp1[n]; }
+#pragma omp parallel for num_threads(6)
+			for (int n = 0; n < NX*NX/4; ++n) { integrand_bE[n] += integrand_temp2[n]; }
+		}
+
+#pragma omp parallel for num_threads(6)
+		for (int n = 0; n < NX*NX/4; ++n) {
+			integrand_bnonE[n] = integrand_bnonE[n] / ((double)(number_of_comfig - initial_number));
+			integrand_bE[n] = integrand_bE[n] / ((double)(number_of_comfig - initial_number));
+		}
+
+		double coeff = 1.0 / ALPHA_S / 2.0 / M_PI / M_PI * ((double)LATTICE_SIZE) / ((double)NX)*((double)LATTICE_SIZE) / ((double)NX)
+			*((double)LATTICE_SIZE) / ((double)NX)*((double)LATTICE_SIZE) / ((double)NX);
+
+		std::ostringstream ofilename_Wigner, diagonal;
+		ofilename_Wigner << "GTMD_simple_NX_" << NX << "_size_" << LATTICE_SIZE
+			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
+		diagonal << "GTMD_simple_diagonal_NX_" << NX << "_size_" << LATTICE_SIZE
+			<< "_rap_" << rapidity << "_config_" << (number_of_comfig - initial_number) << "_real.txt";
+		std::ofstream ofs_res_Wigner(ofilename_Wigner.str().c_str());
+		std::ofstream ofs_res_diagonal(diagonal.str().c_str());
+
+		ofs_res_Wigner << "#kx \t Dy \t DP \t WW \t (DP-WW)/DP \n";
+		ofs_res_diagonal << "#k,d=0 \t DP \t WW \t (DP-WW)/DP \n";
+
+
+		for (int i = 0; i < NX/2; i++) {
+
+			for (int j = 0; j < NX/2; j++) {
+				ofs_res_Wigner << k[NX/4 + i] << "\t" << k[2*j] << "\t" << coeff * integrand_bnonE[NX / 2 *i + j].real() << "\t" << coeff * integrand_bE[NX / 2 *i + j].real()
+					<< "\t" << (integrand_bnonE[NX / 2 *i + j].real() - integrand_bE[NX / 2 *i + j].real()) / integrand_bnonE[NX / 2 *i + j].real() << "\n";
+			}
+
+			ofs_res_Wigner << "\n";
+		}
+
+
+		for (int i = NX / 2; i < NX/2; i++) {
+			ofs_res_diagonal << k[NX / 4 + i] << "\t"
+				<< coeff * integrand_bnonE[NX / 2 *i + i].real() << "\t" << coeff * integrand_bE[NX / 2 *i + i].real()
+				<< "\t" << (integrand_bnonE[NX / 2 *i + i].real() - integrand_bE[NX / 2 *i + i].real()) / integrand_bnonE[NX / 2 *i + i].real() << "\n";
+		}
+
+	}
+	delete k;
+}
+
+
 
 int main()
 {
@@ -3057,7 +3132,7 @@ int main()
 	//assemble_initial_Quark_position(number_of_comfig);
 	//position * LATTICE_IZE/NX = impact_parameter
 	int position = 32;
-	int maxrap = 0;
+	int maxrap = 2;
 	//Calculate_D_matrix(position,maxrap);
 	//Calculate_onepoint_matrix(position, maxrap);
 	//Integration_Smatrix(V_initial, maxrap);
@@ -3077,10 +3152,11 @@ int main()
 	//Derive_Wigner_distribution_DP_WW(V_initial, maxrap, maxmom);
 	//Derive_Wigner_distribution_DP_WW_diagonal(V_initial, maxrap, maxmom);
 	//Wigner_DP_WW_diagonal(V_initial, maxrap, maxmom);
-	Derive_TMD_DP(V_initial, maxrap);
+	//Derive_TMD_DP(V_initial, maxrap);
 	//Derive_TMD_DP_direct(V_initial, maxrap);
 	//Derive_GPD_direct(V_initial, maxrap);
 	//MV_Wigner(maxmom);
+	Derive_GTMD_value(V_initial, maxrap);
 
 	//test_reduction();
 
