@@ -3007,6 +3007,8 @@ void TMD_value(std::complex<double>* V_matrix, std::complex<double>* integrated_
 			//}
 
 
+			cufftDestroy(plan);
+
 		}
 	}
 
@@ -3525,6 +3527,7 @@ void GTMD_value_simple(std::complex<double>* V_matrix, std::complex<double>* int
 				exit(-1);
 			}
 
+			cufftDestroy(plan);
 		}
 	}
 

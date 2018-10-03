@@ -34,7 +34,7 @@ extern const double g2_mu_Rp = 30.0;
 extern const double m_Rp = 2.0;
 extern const double mass = m_Rp / Rp;
 
-int number_of_comfig = 5;
+int number_of_comfig = 120;
 int initial_number = 0;
 //lattice rotational symmetry -||-
 int number_of_symmetry = 4;
@@ -3041,9 +3041,9 @@ void Derive_GTMD_value(std::complex<double>* V_matrix, int max_rap)
 {
 	//notice!! Wigner:DPWigner, EWigner:WWWigner 
 	double   *k = new double[NX];
-	for (int i = 0; i < NX; i++)
+	for (int i = 0; i < NX/2; i++)
 	{
-		k[i] = i * 2.0 * M_PI / LATTICE_SIZE;
+		k[i] = (i-NX/4) * 2.0 * M_PI / LATTICE_SIZE;
 	}
 
 	for (int rap = 0; rap <= max_rap; ++rap) {
@@ -3090,7 +3090,7 @@ void Derive_GTMD_value(std::complex<double>* V_matrix, int max_rap)
 		for (int i = 0; i < NX/2; i++) {
 
 			for (int j = 0; j < NX/2; j++) {
-				ofs_res_Wigner << k[NX/4 + i] << "\t" << k[2*j] << "\t" << coeff * integrand_bnonE[NX / 2 *i + j].real() << "\t" << coeff * integrand_bE[NX / 2 *i + j].real()
+				ofs_res_Wigner << k[i] << "\t" << k[j]*2.0 << "\t" << coeff * integrand_bnonE[NX / 2 *i + j].real() << "\t" << coeff * integrand_bE[NX / 2 *i + j].real()
 					<< "\t" << (integrand_bnonE[NX / 2 *i + j].real() - integrand_bE[NX / 2 *i + j].real()) / integrand_bnonE[NX / 2 *i + j].real() << "\n";
 			}
 
@@ -3098,8 +3098,8 @@ void Derive_GTMD_value(std::complex<double>* V_matrix, int max_rap)
 		}
 
 
-		for (int i = NX / 2; i < NX/2; i++) {
-			ofs_res_diagonal << k[NX / 4 + i] << "\t"
+		for (int i = NX / 4; i < NX/2; i++) {
+			ofs_res_diagonal << k[ i] << "\t"
 				<< coeff * integrand_bnonE[NX / 2 *i + i].real() << "\t" << coeff * integrand_bE[NX / 2 *i + i].real()
 				<< "\t" << (integrand_bnonE[NX / 2 *i + i].real() - integrand_bE[NX / 2 *i + i].real()) / integrand_bnonE[NX / 2 *i + i].real() << "\n";
 		}
@@ -3132,7 +3132,7 @@ int main()
 	//assemble_initial_Quark_position(number_of_comfig);
 	//position * LATTICE_IZE/NX = impact_parameter
 	int position = 32;
-	int maxrap = 2;
+	int maxrap = 1;
 	//Calculate_D_matrix(position,maxrap);
 	//Calculate_onepoint_matrix(position, maxrap);
 	//Integration_Smatrix(V_initial, maxrap);

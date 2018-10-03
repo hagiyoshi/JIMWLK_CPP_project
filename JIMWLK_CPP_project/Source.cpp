@@ -1025,7 +1025,7 @@ int main()
 	Generator_SU3_initializer();
 	double   x_CQ[Nc], y_CQ[Nc];
 
-	for (int num = 121; num <= 160; num++) {
+	for (int num = 141; num <= 160; num++) {
 
 		rapidity = 0.0;
 
