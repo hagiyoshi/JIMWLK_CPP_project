@@ -3129,7 +3129,7 @@ int main()
 	}
 
 	Generator_SU3_initializer();
-	//assemble_initial_Quark_position(number_of_comfig);
+	assemble_initial_Quark_position(number_of_comfig);
 	//position * LATTICE_IZE/NX = impact_parameter
 	int position = 32;
 	int maxrap = 1;
@@ -3156,7 +3156,7 @@ int main()
 	//Derive_TMD_DP_direct(V_initial, maxrap);
 	//Derive_GPD_direct(V_initial, maxrap);
 	//MV_Wigner(maxmom);
-	Derive_GTMD_value(V_initial, maxrap);
+	//Derive_GTMD_value(V_initial, maxrap);
 
 	//test_reduction();
 

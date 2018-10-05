@@ -1,5 +1,4 @@
 //lattice size are 8 times 8 femtometer 
-
 #include <cufft.h> 
 #include <cuda_runtime.h>
 #include <curand.h>

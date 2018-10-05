@@ -1,4 +1,5 @@
 
+#include "mkl_dfti.h"
 #include <Eigen/Dense>
 #include <unsupported/Eigen/MatrixFunctions>
 #include <boost/math/special_functions/bessel.hpp>
@@ -479,6 +480,96 @@ void Calculate_initial_condition_wo_stack_overflow(std::complex<double>* V_init,
 //Calculation of 2 dimentional convolution
 void Calculate_Convolution(double* func1, double* func2, double* Convolution);
 
+
+void convolve_f_and_g(std::complex<double>* ft, std::complex<double>* gt, std::complex<double>* cvt_k, int N)
+{
+#pragma omp parallel for num_threads(6)
+	for (int i = 0; i < N; i++) {
+		for (int j = 0; j < N; j++) {
+			int index = j * N + i;
+				if ((i % 2 == 0 && j % 2 == 0) || (i % 2 == 1 && j % 2 == 1)) {
+					cvt_k[index] = std::complex<double>((ft[index].real() * gt[index].real() *1.0 - ft[index].imag() * gt[index].imag() *1.0),
+						(ft[index].imag() * gt[index].real() *1.0 + ft[index].real() * gt[index].imag() *1.0));
+				}
+				else {
+
+					cvt_k[index] = std::complex<double>(-(ft[index].real() * gt[index].real() *1.0 - ft[index].imag() * gt[index].imag() *1.0),
+						-(ft[index].imag() * gt[index].real() *1.0 + ft[index].real() * gt[index].imag() *1.0));
+				}
+		}
+	}
+}
+
+
+void Calculate_Convolution_MKL(double* func1, double* func2, double* Convolution) {
+	int N = NX;
+	double h = lattice_spacing;
+	double   xmax = h * N / 2.0, xmin = -h * N / 2.0, ymin = -h * N / 2.0,
+		s = 0.1, s2 = s * s;
+	double   *x = new double[N*N], *y = new double[N*N],
+		*f = new double[N*N], *g = new double[N*N], *u_a = new double[N*N], *err = new double[N*N];
+	double r2;
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			x[N*j + i] = xmin + i * h;
+			y[N*j + i] = ymin + j * h;
+			//r2 = (x[N*j + i])*(x[N*j + i]) + (y[N*j + i])*(y[N*j + i]);
+			//f[N*j + i] = (r2 - 2 * s2 - mass*mass*s2*s2) / (s2*s2)*exp(-r2 / (2 * s2));
+			f[N*j + i] = func1[N*j + i];
+			g[N*j + i] = func2[N*j + i];
+
+		}
+	}
+
+	std::complex<double>* f_Comp = new std::complex<double>[N*N];
+	std::complex<double>* g_Comp = new std::complex<double>[N*N];
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			f_Comp[N*j + i] = std::complex<double>(f[N*j + i], 0.0);
+			g_Comp[N*j + i] = std::complex<double>(g[N*j + i], 0.0);
+		}
+	}
+
+
+	DFTI_DESCRIPTOR_HANDLE my_desc1_handle;
+	MKL_LONG status, l[2];
+	l[0] = NX; l[1] = NX;
+	status = DftiCreateDescriptor(&my_desc1_handle, DFTI_SINGLE,
+		DFTI_COMPLEX, 2, l);
+
+	status = DftiCommitDescriptor(my_desc1_handle);
+	status = DftiComputeForward(my_desc1_handle, f_Comp);
+	status = DftiComputeForward(my_desc1_handle, g_Comp);
+
+	std::complex<double>* Conv_Comp = new std::complex<double>[N*N];
+	convolve_f_and_g(f_Comp, g_Comp, Conv_Comp, N);
+
+	status = DftiComputeBackward(my_desc1_handle, Conv_Comp);
+
+	status = DftiFreeDescriptor(&my_desc1_handle);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			Convolution[N*j + i] = Conv_Comp[N*j + i].real() * 1.0*LATTICE_SIZE*1.0*LATTICE_SIZE / ((double)(N*N)) / ((double)(N*N));
+		}
+	}
+
+	delete[](x);
+	delete[](y);
+	delete[](f);
+	delete[](g);
+	delete[](u_a);
+	delete[](err);
+	delete[]f_Comp;
+	delete[]g_Comp;
+	delete[]Conv_Comp;
+}
+
+
 void Calculate_Convolution_complex(std::complex<double>* func1, std::complex<double>* func2);
 
 void Calculation_2D_convolution()
@@ -505,10 +596,11 @@ void Calculation_2D_convolution()
 		}
 	}
 
-	Calculate_Convolution(f, g, Convolution);
+	//Calculate_Convolution(f, g, Convolution);
+	Calculate_Convolution_MKL(f, g, Convolution);
 
 	std::ostringstream ofilename_c;
-	ofilename_c << "G:\\hagiyoshi\\Data\\test_FFT\\Convolution.txt";
+	ofilename_c << "G:\\hagiyoshi\\Data\\test_FFT\\Convolution_test.txt";
 	std::ofstream ofs_res_c(ofilename_c.str().c_str());
 
 	ofs_res_c << "#x" << "\t" << "y" << "\t" << "u numeric" << "\t" << "u analytic" 
@@ -534,6 +626,7 @@ void Calculation_2D_convolution()
 }
 
 void Calculate_Convolution_1D();
+
 
 void One_step_matrix(std::complex<double>* V_initial,double delta_rapidity)
 {
@@ -1021,11 +1114,11 @@ int main()
 	std::complex<double>* V_initial = new std::complex<double>[3 * 3 * NX*NX];
 	//test_fourier_noise();
 	//Calculate_Convolution_1D();
-	//Calculation_2D_convolution();
+	Calculation_2D_convolution();
 	Generator_SU3_initializer();
 	double   x_CQ[Nc], y_CQ[Nc];
 
-	for (int num = 141; num <= 160; num++) {
+	for (int num = 161; num <= 190; num++) {
 
 		rapidity = 0.0;
 
