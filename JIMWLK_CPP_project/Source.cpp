@@ -537,7 +537,7 @@ void Calculate_Convolution_MKL(double* func1, double* func2, double* Convolution
 	DFTI_DESCRIPTOR_HANDLE my_desc1_handle;
 	MKL_LONG status, l[2];
 	l[0] = NX; l[1] = NX;
-	status = DftiCreateDescriptor(&my_desc1_handle, DFTI_SINGLE,
+	status = DftiCreateDescriptor(&my_desc1_handle, DFTI_DOUBLE,
 		DFTI_COMPLEX, 2, l);
 
 	status = DftiCommitDescriptor(my_desc1_handle);
