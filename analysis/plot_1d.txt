@@ -1,0 +1,18 @@
+reset
+cd 'C:\Users\hagip\source\repos\JIMWLK_CPP_project\analysis'
+set autoscale
+set grid
+set logscale x
+set yrange [0:1.0]
+set xlabel "{/=30 r_{/Symbol \136}}"
+set ylabel "{/Times-New-Roman:Normal=20  D(|b|_{/Symbol \136} =1.0)}"
+plot	'D_matrix_position_32_NX_256_Nini_200_initial_0_final_900_rapidity_0.txt' u 1:2 smooth csplines title'Y=0 b=1 256 inin200' ,\
+	'D_matrix_MV_position_RP_128_NX_1024.txt' u 1:2 smooth csplines title'MV model'  
+set terminal  postscript eps color enhanced "Arial" 25
+set output 'D_matrix_position_RP_32_256_NX_1024_initial_0_final_900_rapidity_0.pdf'
+set terminal pdfcairo font "Arial" fontscale 0.5
+set encoding utf8
+replot
+set output
+unset output
+set terminal win

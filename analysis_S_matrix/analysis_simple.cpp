@@ -34,8 +34,8 @@ extern const double g2_mu_Rp = 30.0;
 extern const double m_Rp = 2.0;
 extern const double mass = m_Rp / Rp;
 
-int number_of_comfig = 120;
-int initial_number = 0;
+int number_of_comfig = 3070;
+int initial_number = 3000;
 //lattice rotational symmetry -||-
 int number_of_symmetry = 4;
 
@@ -3132,8 +3132,8 @@ int main()
 	assemble_initial_Quark_position(number_of_comfig);
 	//position * LATTICE_IZE/NX = impact_parameter
 	int position = 32;
-	int maxrap = 1;
-	//Calculate_D_matrix(position,maxrap);
+	int maxrap = 0;
+	Calculate_D_matrix(position,maxrap);
 	//Calculate_onepoint_matrix(position, maxrap);
 	//Integration_Smatrix(V_initial, maxrap);
 	//Integration_Smatrix_towards_Wigner(V_initial, maxrap);

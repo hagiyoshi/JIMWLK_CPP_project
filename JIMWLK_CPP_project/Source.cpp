@@ -1,5 +1,6 @@
 
 #include "mkl_dfti.h"
+#include <fftw3.h>
 #include <Eigen/Dense>
 #include <unsupported/Eigen/MatrixFunctions>
 #include <boost/math/special_functions/bessel.hpp>
@@ -245,6 +246,198 @@ void Initial_quark_position(double* x_CQ,double* y_CQ)
 //from JIMWLK.cu
 void Solve_Poisson_Equation(double* rho,double* Solution);
 
+void solve_poisson_with_mass_and_v_MKL(std::complex<double> *ft, std::complex<double> *ft_k, double *k, double mass, int N)
+{
+
+#pragma omp parallel for num_threads(6)
+	for (int i = 0; i < N; i++) {
+		for (int j = 0; j < N; j++) {
+	int index = j * N + i;
+		double k2 = k[i] * k[i] + k[j] * k[j] + mass * mass;
+#ifdef v_Parameter
+		double v_factor = exp(-v_Parameter * sqrt(k[i] * k[i] + k[j] * k[j]));
+#else
+		double v_factor = 1.0;
+#endif
+		if (k2 < 1.0e-30) { k2 = 1.0; }
+		ft_k[index] = std::complex<double>(-ft[index].real() *1.0 / k2 * v_factor,
+											-ft[index].imag() *1.0 / k2 * v_factor);
+
+		}
+	}
+}
+
+void Solve_Poisson_Equation_MKL(double* rho, double* Solution) {
+
+	int N = NX;
+	double h = lattice_spacing;
+	double   xmax = h * N / 2.0, xmin = -h * N / 2.0, ymin = -h * N / 2.0,
+		s = 0.1, s2 = s * s;
+	double   *x = new double[N*N], *y = new double[N*N],
+		*f = new double[N*N], *u_a = new double[N*N], *err = new double[N*N];
+	double r2;
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			x[N*j + i] = xmin + i * h;
+			y[N*j + i] = ymin + j * h;
+			r2 = (x[N*j + i])*(x[N*j + i]) + (y[N*j + i])*(y[N*j + i]);
+			//f[N*j + i] = (r2 - 2 * s2 - mass*mass*s2*s2) / (s2*s2)*exp(-r2 / (2 * s2));
+			f[N*j + i] = rho[N*j + i];
+
+		}
+	}
+
+	double   *k = new double[N];
+	for (int i = 0; i <= N / 2; i++)
+	{
+		k[i] = i * 2.0 * M_PI / LATTICE_SIZE;
+	}
+	for (int i = N / 2 + 1; i < N; i++)
+	{
+		k[i] = (i - N) * 2.0 * M_PI / LATTICE_SIZE;
+	}
+
+	std::complex<double>* f_Comp = new std::complex<double>[N*N];
+	std::complex<double>* g_Comp = new std::complex<double>[N*N];
+
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			f_Comp[N*j + i] = std::complex<double>(f[N*j + i], 0.0);
+		}
+	}
+
+
+	DFTI_DESCRIPTOR_HANDLE my_desc1_handle;
+	MKL_LONG status, l[2];
+	l[0] = NX; l[1] = NX;
+	status = DftiCreateDescriptor(&my_desc1_handle, DFTI_DOUBLE,
+		DFTI_COMPLEX, 2, l);
+
+	status = DftiCommitDescriptor(my_desc1_handle);
+	status = DftiComputeForward(my_desc1_handle, f_Comp);
+
+	solve_poisson_with_mass_and_v_MKL(f_Comp, g_Comp, k, mass, N);
+
+	status = DftiComputeBackward(my_desc1_handle, g_Comp);
+
+	status = DftiFreeDescriptor(&my_desc1_handle);
+
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			Solution[N*j + i] = g_Comp[N*j + i].real() / ((double)(N*N));
+		}
+	}
+
+
+	delete[](x);
+	delete[](y);
+	delete[](f);
+	delete[](u_a);
+	delete[](err);
+	delete[](k);
+	delete[]f_Comp;
+	delete[]g_Comp;
+}
+
+void Solve_Poisson_Equation_FFTW(double* rho, double* Solution) {
+
+	int N = NX;
+	double h = lattice_spacing;
+	double   xmax = h * N / 2.0, xmin = -h * N / 2.0, ymin = -h * N / 2.0,
+		s = 0.1, s2 = s * s;
+	double   *x = new double[N*N], *y = new double[N*N],
+		*f = new double[N*N], *u_a = new double[N*N], *err = new double[N*N];
+	double r2;
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			x[N*j + i] = xmin + i * h;
+			y[N*j + i] = ymin + j * h;
+			r2 = (x[N*j + i])*(x[N*j + i]) + (y[N*j + i])*(y[N*j + i]);
+			//f[N*j + i] = (r2 - 2 * s2 - mass*mass*s2*s2) / (s2*s2)*exp(-r2 / (2 * s2));
+			f[N*j + i] = rho[N*j + i];
+
+		}
+	}
+
+	double   *k = new double[N];
+	for (int i = 0; i <= N / 2; i++)
+	{
+		k[i] = i * 2.0 * M_PI / LATTICE_SIZE;
+	}
+	for (int i = N / 2 + 1; i < N; i++)
+	{
+		k[i] = (i - N) * 2.0 * M_PI / LATTICE_SIZE;
+	}
+
+	std::complex<double>* f_Comp = new std::complex<double>[N*N];
+	std::complex<double>* g_Comp = new std::complex<double>[N*N];
+
+	fftw_complex* src = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+	fftw_complex* dst = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			f_Comp[N*j + i] = std::complex<double>(f[N*j + i], 0.0);
+			src[N*j + i][0] = f[N*j + i];
+			src[N*j + i][1] = 0.0;
+		}
+	}
+	// プランの生成( 配列サイズ, 入力配列, 出力配列, 変換・逆変換フラグ, 最適化フラグ)
+	fftw_plan plan = fftw_plan_dft_2d(N,N, src, dst, FFTW_FORWARD, FFTW_ESTIMATE);
+
+	// フーリエ変換実行 プラン生成時に指定した出力配列に結果が格納される。
+	fftw_execute(plan);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			f_Comp[N*j + i] = std::complex<double>(dst[N*j + i][0], dst[N*j + i][1]);
+		}
+	}
+
+	solve_poisson_with_mass_and_v_MKL(f_Comp, g_Comp, k, mass, N);
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			src[N*j + i][0] = g_Comp[N*j + i].real();
+			src[N*j + i][1] = g_Comp[N*j + i].imag();
+		}
+	}
+	plan = fftw_plan_dft_2d(N, N, src, dst, FFTW_BACKWARD, FFTW_ESTIMATE);
+
+
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			Solution[N*j + i] = dst[N*j + i][0] / ((double)(N*N));
+		}
+	}
+
+	// 終了時、専用関数でメモリを開放する
+	if (plan)
+	{
+		fftw_destroy_plan(plan);
+	}
+	fftw_free(src);
+	fftw_free(dst);
+
+	delete[](x);
+	delete[](y);
+	delete[](f);
+	delete[](u_a);
+	delete[](err);
+	delete[](k);
+	delete[]f_Comp;
+}
+
 //using the unsupported in Eigen. we only add the unsupported file at 
 // C:\Users\hagip\source\repos\JIMWLK_CPP_project\packages\Eigen.3.3.3\build\native\include
 Eigen::Matrix3cd Exp_Matrix3cd(Eigen::Matrix3cd A)
@@ -292,7 +485,8 @@ void Solution_times_g(double* noise_rho, double* solution_Poisson, double* x_CQ,
 		}
 	}
 
-	Solve_Poisson_Equation(noise_rho, solution_Poisson); 
+	//Solve_Poisson_Equation(noise_rho, solution_Poisson);
+	Solve_Poisson_Equation_MKL(noise_rho, solution_Poisson);
 
 	delete[]x;
 	delete[]y;
@@ -500,6 +694,25 @@ void convolve_f_and_g(std::complex<double>* ft, std::complex<double>* gt, std::c
 	}
 }
 
+void convolve_f_and_g_FFTW(std::complex<double>* ft, std::complex<double>* gt, std::complex<double>* cvt_k, int N)
+{
+#pragma omp parallel for num_threads(6)
+	for (int i = 0; i < N; i++) {
+		for (int j = 0; j < N; j++) {
+			int index = j * N + i;
+			if ((i % 2 == 0 && j % 2 == 0) || (i % 2 == 1 && j % 2 == 1)) {
+				cvt_k[index] = std::complex<double>((ft[index].real() * gt[index].real() *1.0 - ft[index].imag() * gt[index].imag() *1.0),
+					(ft[index].imag() * gt[index].real() *1.0 + ft[index].real() * gt[index].imag() *1.0));
+			}
+			else {
+
+				cvt_k[index] = std::complex<double>(-(ft[index].real() * gt[index].real() *1.0 - ft[index].imag() * gt[index].imag() *1.0),
+					-(ft[index].imag() * gt[index].real() *1.0 + ft[index].real() * gt[index].imag() *1.0));
+			}
+		}
+	}
+}
+
 
 void Calculate_Convolution_MKL(double* func1, double* func2, double* Convolution) {
 	int N = NX;
@@ -570,6 +783,292 @@ void Calculate_Convolution_MKL(double* func1, double* func2, double* Convolution
 }
 
 
+void Calculate_Convolution_complex_MKL(std::complex<double>* func1, std::complex<double>* func2) {
+	int N = NX;
+	double h = lattice_spacing;
+	double   xmax = h * N / 2.0, xmin = -h * N / 2.0, ymin = -h * N / 2.0,
+		s = 0.1, s2 = s * s;
+	double   *x = new double[N*N], *y = new double[N*N],
+		 *u_a = new double[N*N], *err = new double[N*N];
+	double r2;
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			x[N*j + i] = xmin + i * h;
+			y[N*j + i] = ymin + j * h;
+			//r2 = (x[N*j + i])*(x[N*j + i]) + (y[N*j + i])*(y[N*j + i]);
+			//f[N*j + i] = (r2 - 2 * s2 - mass*mass*s2*s2) / (s2*s2)*exp(-r2 / (2 * s2));
+
+		}
+	}
+
+	std::complex<double>* f_Comp = new std::complex<double>[N*N];
+	std::complex<double>* g_Comp = new std::complex<double>[N*N];
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			f_Comp[N*j + i] = func1[N*j + i];
+			g_Comp[N*j + i] = func2[N*j + i];
+		}
+	}
+
+
+	DFTI_DESCRIPTOR_HANDLE my_desc1_handle;
+	MKL_LONG status, l[2];
+	l[0] = NX; l[1] = NX;
+	status = DftiCreateDescriptor(&my_desc1_handle, DFTI_DOUBLE,
+		DFTI_COMPLEX, 2, l);
+
+	status = DftiCommitDescriptor(my_desc1_handle);
+	status = DftiComputeForward(my_desc1_handle, f_Comp);
+	status = DftiComputeForward(my_desc1_handle, g_Comp);
+
+	std::complex<double>* Conv_Comp = new std::complex<double>[N*N];
+	convolve_f_and_g(f_Comp, g_Comp, Conv_Comp, N);
+
+	status = DftiComputeBackward(my_desc1_handle, Conv_Comp);
+
+	status = DftiFreeDescriptor(&my_desc1_handle);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			func2[N*j + i] = Conv_Comp[N*j + i] * std::complex<double>(1.0*LATTICE_SIZE*1.0*LATTICE_SIZE / ((double)(N*N)) / ((double)(N*N)),0.0);
+		}
+	}
+
+	delete[](x);
+	delete[](y);
+	delete[](u_a);
+	delete[](err);
+	delete[]f_Comp;
+	delete[]g_Comp;
+	delete[]Conv_Comp;
+}
+
+
+void Calculate_Convolution_FFTW(double* func1, double* func2, double* Convolution) {
+	int N = NX;
+	double h = lattice_spacing;
+	double   xmax = h * N / 2.0, xmin = -h * N / 2.0, ymin = -h * N / 2.0,
+		s = 0.1, s2 = s * s;
+	double   *x = new double[N*N], *y = new double[N*N],
+		*f = new double[N*N], *g = new double[N*N], *u_a = new double[N*N], *err = new double[N*N];
+	double r2;
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			x[N*j + i] = xmin + i * h;
+			y[N*j + i] = ymin + j * h;
+			//r2 = (x[N*j + i])*(x[N*j + i]) + (y[N*j + i])*(y[N*j + i]);
+			//f[N*j + i] = (r2 - 2 * s2 - mass*mass*s2*s2) / (s2*s2)*exp(-r2 / (2 * s2));
+			f[N*j + i] = func1[N*j + i];
+			g[N*j + i] = func2[N*j + i];
+
+		}
+	}
+
+	std::complex<double>* f_Comp = new std::complex<double>[N*N];
+	std::complex<double>* g_Comp = new std::complex<double>[N*N];
+	fftw_complex* src = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+	fftw_complex* src2 = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+	fftw_complex* dst = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+	fftw_complex* dst2 = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			src[N*j + i][0] = f[N*j + i];
+			src[N*j + i][1] = 0.0;
+
+			src2[N*j + i][0] = g[N*j + i];
+			src2[N*j + i][1] = 0.0;
+		}
+	}
+
+	// プランの生成( 配列サイズ, 入力配列, 出力配列, 変換・逆変換フラグ, 最適化フラグ)
+	fftw_plan plan = fftw_plan_dft_2d(N, N, src, dst, FFTW_FORWARD, FFTW_ESTIMATE);
+
+	// フーリエ変換実行 プラン生成時に指定した出力配列に結果が格納される。
+	fftw_execute(plan);
+
+	plan = fftw_plan_dft_2d(N, N, src2, dst2, FFTW_FORWARD, FFTW_ESTIMATE);
+	fftw_execute(plan);
+
+
+	std::complex<double>* Conv_Comp = new std::complex<double>[N*N];
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			f_Comp[N*j + i] = std::complex<double>(dst[N*j + i][0], dst[N*j + i][1]);
+			g_Comp[N*j + i] = std::complex<double>(dst2[N*j + i][0], dst2[N*j + i][1]);
+			//f_Comp[N*j + i] = std::complex<double>(0.0, 0.0);
+			//g_Comp[N*j + i] = std::complex<double>(0.0, 0.0);
+			//Conv_Comp[N*j + i] = f_Comp[N*j + i] * g_Comp[N*j + i];
+			//Conv_Comp[N*j + i] = f_Comp[N*j + i];
+		}
+	}
+
+	convolve_f_and_g_FFTW(f_Comp, g_Comp, Conv_Comp, N);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			src[N*j + i][0] = Conv_Comp[N*j + i].real();
+			src[N*j + i][1] = Conv_Comp[N*j + i].imag();
+		}
+	}
+
+	plan = fftw_plan_dft_2d(N, N, src, dst, FFTW_BACKWARD, FFTW_ESTIMATE);
+	fftw_execute(plan);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			Convolution[N*j + i] = dst[N*j + i][0] 
+				* 1.0*LATTICE_SIZE*1.0*LATTICE_SIZE 
+				 / ((double)(N*N))
+				 / ((double)(N*N))
+				;
+		}
+	}
+
+	// 終了時、専用関数でメモリを開放する
+	if (plan)
+	{
+		fftw_destroy_plan(plan);
+	}
+	fftw_free(src);
+	fftw_free(dst);
+	fftw_free(src2);
+	fftw_free(dst2);
+	delete[](x);
+	delete[](y);
+	delete[](f);
+	delete[](g);
+	delete[](u_a);
+	delete[](err);
+	delete[]f_Comp;
+	delete[]g_Comp;
+	delete[]Conv_Comp;
+}
+
+
+
+void Calculate_Convolution_complex_FFTW(std::complex<double>* func1, std::complex<double>* func2) {
+	int N = NX;
+	double h = lattice_spacing;
+	double   xmax = h * N / 2.0, xmin = -h * N / 2.0, ymin = -h * N / 2.0,
+		s = 0.1, s2 = s * s;
+	double   *x = new double[N*N], *y = new double[N*N],
+		*f = new double[N*N], *g = new double[N*N], *u_a = new double[N*N], *err = new double[N*N];
+	double r2;
+	std::complex<double>* f_Comp = new std::complex<double>[N*N];
+	std::complex<double>* g_Comp = new std::complex<double>[N*N];
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			x[N*j + i] = xmin + i * h;
+			y[N*j + i] = ymin + j * h;
+			//r2 = (x[N*j + i])*(x[N*j + i]) + (y[N*j + i])*(y[N*j + i]);
+			//f[N*j + i] = (r2 - 2 * s2 - mass*mass*s2*s2) / (s2*s2)*exp(-r2 / (2 * s2));
+			f_Comp[N*j + i] = func1[N*j + i];
+			g_Comp[N*j + i] = func2[N*j + i];
+
+		}
+	}
+
+	fftw_complex* src = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+	fftw_complex* src2 = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+	fftw_complex* dst = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+	fftw_complex* dst2 = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N*N);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			src[N*j + i][0] = f_Comp[N*j + i].real();
+			src[N*j + i][1] = f_Comp[N*j + i].imag();
+
+			src2[N*j + i][0] = g_Comp[N*j + i].real();
+			src2[N*j + i][1] = g_Comp[N*j + i].imag();
+		}
+	}
+
+	// プランの生成( 配列サイズ, 入力配列, 出力配列, 変換・逆変換フラグ, 最適化フラグ)
+	fftw_plan plan = fftw_plan_dft_2d(N, N, src, dst, FFTW_FORWARD, FFTW_ESTIMATE);
+
+	// フーリエ変換実行 プラン生成時に指定した出力配列に結果が格納される。
+	fftw_execute(plan);
+
+	plan = fftw_plan_dft_2d(N, N, src2, dst2, FFTW_FORWARD, FFTW_ESTIMATE);
+	fftw_execute(plan);
+
+
+	std::complex<double>* Conv_Comp = new std::complex<double>[N*N];
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			f_Comp[N*j + i] = std::complex<double>(dst[N*j + i][0], dst[N*j + i][1]);
+			g_Comp[N*j + i] = std::complex<double>(dst2[N*j + i][0], dst2[N*j + i][1]);
+			//f_Comp[N*j + i] = std::complex<double>(0.0, 0.0);
+			//g_Comp[N*j + i] = std::complex<double>(0.0, 0.0);
+			//Conv_Comp[N*j + i] = f_Comp[N*j + i] * g_Comp[N*j + i];
+			//Conv_Comp[N*j + i] = f_Comp[N*j + i];
+		}
+	}
+
+	convolve_f_and_g_FFTW(f_Comp, g_Comp, Conv_Comp, N);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			src[N*j + i][0] = Conv_Comp[N*j + i].real();
+			src[N*j + i][1] = Conv_Comp[N*j + i].imag();
+		}
+	}
+
+	plan = fftw_plan_dft_2d(N, N, src, dst, FFTW_BACKWARD, FFTW_ESTIMATE);
+	fftw_execute(plan);
+
+	for (int j = 0; j < N; j++) {
+		for (int i = 0; i < N; i++)
+		{
+			func2[N*j + i] = std::complex<double>(dst[N*j + i][0]
+				* 1.0*LATTICE_SIZE*1.0*LATTICE_SIZE
+				/ ((double)(N*N))
+				/ ((double)(N*N)),
+				dst[N*j + i][1]
+				* 1.0*LATTICE_SIZE*1.0*LATTICE_SIZE
+				/ ((double)(N*N))
+				/ ((double)(N*N))
+				)
+				;
+		}
+	}
+
+	// 終了時、専用関数でメモリを開放する
+	if (plan)
+	{
+		fftw_destroy_plan(plan);
+	}
+	fftw_free(src);
+	fftw_free(dst);
+	fftw_free(src2);
+	fftw_free(dst2);
+	delete[](x);
+	delete[](y);
+	delete[](f);
+	delete[](g);
+	delete[](u_a);
+	delete[](err);
+	delete[]f_Comp;
+	delete[]g_Comp;
+	delete[]Conv_Comp;
+}
+
+
+
 void Calculate_Convolution_complex(std::complex<double>* func1, std::complex<double>* func2);
 
 void Calculation_2D_convolution()
@@ -597,7 +1096,8 @@ void Calculation_2D_convolution()
 	}
 
 	//Calculate_Convolution(f, g, Convolution);
-	Calculate_Convolution_MKL(f, g, Convolution);
+	//Calculate_Convolution_MKL(f, g, Convolution);
+	Calculate_Convolution_FFTW(f, g, Convolution);
 
 	std::ostringstream ofilename_c;
 	ofilename_c << "G:\\hagiyoshi\\Data\\test_FFT\\Convolution_test.txt";
@@ -611,7 +1111,8 @@ void Calculation_2D_convolution()
 		for (int i = 0; i < N; i++)
 		{
 			ofs_res_c << x[N*j + i] << "\t" << y[N*j + i] << "\t" << Convolution[N*j + i] << "\t" << analytical_solution[N*j + i]
-				<< "\t" << analytical_solution[N*j + i]/ Convolution[N*j + i] << "\n";
+				<< "\t" << analytical_solution[N*j + i]/ Convolution[N*j + i] 
+				<< "\n";
 		}
 		ofs_res_c << "\n";
 	}
@@ -728,6 +1229,10 @@ void One_step_matrix(std::complex<double>* V_initial,double delta_rapidity)
 				V_convf2[vx] = V_gaussf2[3 * 3 * vx + 3 * i + j];
 			}
 
+			//Calculate_Convolution_complex_FFTW(kernel1.data(), V_conv1.data());
+			//Calculate_Convolution_complex_FFTW(kernel2.data(), V_conv2.data());
+			//Calculate_Convolution_complex_FFTW(kernel1.data(), V_convf1.data());
+			//Calculate_Convolution_complex_FFTW(kernel2.data(), V_convf2.data());
 			Calculate_Convolution_complex(kernel1.data(), V_conv1.data());
 			Calculate_Convolution_complex(kernel2.data(), V_conv2.data());
 			Calculate_Convolution_complex(kernel1.data(), V_convf1.data());
@@ -1114,11 +1619,11 @@ int main()
 	std::complex<double>* V_initial = new std::complex<double>[3 * 3 * NX*NX];
 	//test_fourier_noise();
 	//Calculate_Convolution_1D();
-	Calculation_2D_convolution();
+	//Calculation_2D_convolution();
 	Generator_SU3_initializer();
 	double   x_CQ[Nc], y_CQ[Nc];
 
-	for (int num = 161; num <= 190; num++) {
+	for (int num = 3000; num <= 3200; num++) {
 
 		rapidity = 0.0;
 
