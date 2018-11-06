@@ -31,13 +31,34 @@
 //parameters for solving the JIMWLK equation
 //we need extern for linking another object files. 
 //Because const variables mean only internal likerage and don't mean to be used in the external objects
-extern const double Rp = 1.0;
-extern const double R_CQ = Rp / 3.0;
-extern const double g2_mu_Rp = 30.0;
+//extern const double Rp = 1.0;
+//extern const double R_CQ = Rp / 3.0;
+//extern const double g2_mu_Rp = 30.0;
+//extern const double m_Rp = 2.0;
+//extern const double mass = m_Rp / Rp;
+//1.0 makes the LATTICE_SIZE and NX cast double
+//extern const double lattice_spacing = 1.0*LATTICE_SIZE / NX;
+
+#ifdef Round_Proton
+
+extern const double Rp = sqrt(2.1) / 5.0;
+//extern const double R_CQ = Rp / 3.0;
+extern const double g2_mu_Rp = sqrt(0.8)*5.0;
 extern const double m_Rp = 2.0;
-extern const double mass = m_Rp / Rp;
+extern const double mass = 1.0;
 //1.0 makes the LATTICE_SIZE and NX cast double
 extern const double lattice_spacing = 1.0*LATTICE_SIZE / NX;
+
+#else
+
+extern const double Rp = sqrt(3.2)/5.0;
+extern const double R_CQ = sqrt(0.5)/5.0;
+extern const double g2_mu_Rp = sqrt(2.8)*5.0;
+extern const double m_Rp = 2.0;
+extern const double mass = 1.0;
+//1.0 makes the LATTICE_SIZE and NX cast double
+extern const double lattice_spacing = 1.0*LATTICE_SIZE / NX;
+#endif
 
 //rapidity
 double rapidity = 0;
@@ -464,7 +485,7 @@ void Solution_times_g(double* noise_rho, double* solution_Poisson, double* x_CQ,
 			double coefficient = g2_mu_Rp / sqrt(INITIAL_N);
 
 #else
-			double coefficient = g2_mu_Rp/3.0 / sqrt(INITIAL_N);
+			double coefficient = g2_mu_Rp/ sqrt(INITIAL_N);
 #endif
 
 			x[NX*j + i] = xmin + i*lattice_spacing;
@@ -1233,10 +1254,14 @@ void One_step_matrix(std::complex<double>* V_initial,double delta_rapidity)
 			//Calculate_Convolution_complex_FFTW(kernel2.data(), V_conv2.data());
 			//Calculate_Convolution_complex_FFTW(kernel1.data(), V_convf1.data());
 			//Calculate_Convolution_complex_FFTW(kernel2.data(), V_convf2.data());
-			Calculate_Convolution_complex(kernel1.data(), V_conv1.data());
-			Calculate_Convolution_complex(kernel2.data(), V_conv2.data());
-			Calculate_Convolution_complex(kernel1.data(), V_convf1.data());
-			Calculate_Convolution_complex(kernel2.data(), V_convf2.data());
+			Calculate_Convolution_complex_MKL(kernel1.data(), V_conv1.data());
+			Calculate_Convolution_complex_MKL(kernel2.data(), V_conv2.data());
+			Calculate_Convolution_complex_MKL(kernel1.data(), V_convf1.data());
+			Calculate_Convolution_complex_MKL(kernel2.data(), V_convf2.data());
+			//Calculate_Convolution_complex(kernel1.data(), V_conv1.data());
+			//Calculate_Convolution_complex(kernel2.data(), V_conv2.data());
+			//Calculate_Convolution_complex(kernel1.data(), V_convf1.data());
+			//Calculate_Convolution_complex(kernel2.data(), V_convf2.data());
 
 
 			for (int vx = 0; vx < NX*NX; ++vx) {
@@ -1623,7 +1648,7 @@ int main()
 	Generator_SU3_initializer();
 	double   x_CQ[Nc], y_CQ[Nc];
 
-	for (int num = 3000; num <= 3200; num++) {
+	for (int num = 3000; num <= 3000; num++) {
 
 		rapidity = 0.0;
 

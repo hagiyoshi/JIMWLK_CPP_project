@@ -34,7 +34,7 @@ extern const double g2_mu_Rp = 30.0;
 extern const double m_Rp = 2.0;
 extern const double mass = m_Rp / Rp;
 
-int number_of_comfig = 3070;
+int number_of_comfig = 3001;
 int initial_number = 3000;
 //lattice rotational symmetry -||-
 int number_of_symmetry = 4;
@@ -768,8 +768,8 @@ void Calculate_D_matrix(int position_B,int maxrap)
 
 	for (int rap = 0; rap <= maxrap; rap++)
 	{
-		//rapidity = 2 * rap;
-		rapidity = OUTPUT_Y * rap;
+		rapidity = 2 * rap;
+		//rapidity = OUTPUT_Y * rap;
 
 		for (int number = initial_number; number < number_of_comfig; number++) {
 			Load_matrix_V(V_initial, rapidity, number);
@@ -3129,10 +3129,10 @@ int main()
 	}
 
 	Generator_SU3_initializer();
-	assemble_initial_Quark_position(number_of_comfig);
+	//assemble_initial_Quark_position(number_of_comfig);
 	//position * LATTICE_IZE/NX = impact_parameter
 	int position = 32;
-	int maxrap = 0;
+	int maxrap = 5;
 	Calculate_D_matrix(position,maxrap);
 	//Calculate_onepoint_matrix(position, maxrap);
 	//Integration_Smatrix(V_initial, maxrap);

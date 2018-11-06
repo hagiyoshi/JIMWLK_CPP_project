@@ -1,0 +1,22 @@
+reset
+cd 'C:\Users\hagip\source\repos\JIMWLK_CPP_project\analysis'
+set autoscale
+set grid
+set logscale x
+set yrange [0:1.0]
+set xlabel "{/=30 r_{/Symbol \136}}"
+set ylabel "{/Times-New-Roman:Normal=20  D(|b|_{/Symbol \136} =1.0)}"
+plot	'D_matrix_position_32_NX_256_Nini_200_initial_0_final_2_rapidity_0.txt' u 1:2 smooth csplines title'Y=0 b=1 256 inin200' ,\
+	'D_matrix_position_32_NX_256_Nini_200_initial_0_final_2_rapidity_2.txt' u 1:2 smooth csplines title'Y=2 b=1' ,\
+	'D_matrix_position_32_NX_256_Nini_200_initial_0_final_2_rapidity_4.txt' u 1:2 smooth csplines title'Y=4 b=1' ,\
+	'D_matrix_position_32_NX_256_Nini_200_initial_0_final_2_rapidity_6.txt' u 1:2 smooth csplines title'Y=6 b=1' ,\
+	'D_matrix_position_32_NX_256_Nini_200_initial_0_final_2_rapidity_8.txt' u 1:2 smooth csplines title'Y=8 b=1' ,\
+	'D_matrix_position_32_NX_256_Nini_200_initial_0_final_2_rapidity_10.txt' u 1:2 smooth csplines title'Y=10 b=1' 
+set terminal  postscript eps color enhanced "Arial" 25
+set output 'D_matrix_position_RP_32_256_NX_1024_initial_0_final_2.pdf'
+set terminal pdfcairo font "Arial" fontscale 0.5
+set encoding utf8
+replot
+set output
+unset output
+set terminal win
